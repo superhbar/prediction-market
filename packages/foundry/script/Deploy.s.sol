@@ -1,22 +1,22 @@
 //SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.24;
 
 import { ScaffoldETHDeploy } from "./DeployHelpers.s.sol";
-import { HederaToken } from "../contracts/HederaToken.sol";
-import { HtsTokenCreator } from "../contracts/HtsTokenCreator.sol";
+import { Config, Feed, PredictionMarkets } from "../contracts/PredictionMarkets.sol";
+import { HelperConfig } from "./HelperConfig.s.sol";
 
 /**
  * @notice Main deployment script for all contracts
- * @dev Run this when you want to deploy multiple contracts at once
+ * @dev Deploys PredictionMarkets with the HelperConfig feeds and config. Creates no markets:
+ *      forge script cannot simulate the HTS and HSS precompiles, so markets are created on-chain
+ *      after deployment.
  *
  * Example: yarn deploy # runs this script(without `--file` flag)
  */
-contract DeployScript is ScaffoldETHDeploy {
+contract DeployScript is ScaffoldETHDeploy, HelperConfig {
     function run() external ScaffoldEthDeployerRunner {
-        HederaToken hederaToken = new HederaToken(deployer);
-        deployments.push(Deployment({ name: "HederaToken", addr: address(hederaToken) }));
-
-        HtsTokenCreator creator = new HtsTokenCreator();
-        deployments.push(Deployment({ name: "HtsTokenCreator", addr: address(creator) }));
+        (bytes32[] memory feedKeys, Feed[] memory feeds, address pyth, Config memory cfg) = getConfig();
+        PredictionMarkets markets = new PredictionMarkets(feedKeys, feeds, pyth, cfg);
+        deployments.push(Deployment({ name: "PredictionMarkets", addr: address(markets) }));
     }
 }
