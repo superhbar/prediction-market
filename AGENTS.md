@@ -12,7 +12,7 @@ yarn foundry:account:import
 yarn foundry:deploy --network hedera_testnet --keystore <name>
 DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet   # full lifecycle on testnet, ~17 min
 yarn foundry:test          # 78 forge unit tests, HTS/HSS mocked
-yarn next:test             # vitest: units, feeds, status, hashscan
+yarn next:test             # vitest: units, feeds, status, hashscan, activity, HBAR price
 yarn next:lint && yarn next:check-types && yarn next:build
 yarn lint                  # next:lint + foundry:lint
 ```
@@ -30,9 +30,9 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 - `packages/foundry/scripts-js/e2eTestnet.js`: create, stake both sides, wait for scheduled settle, redeem, withdraw reserve.
 - `packages/foundry/test/`: `PredictionMarkets.t.sol`, `PriceMath.t.sol`, `HelperConfig.t.sol`, `mocks/` (etched at `0x167`/`0x16b`).
 - `packages/nextjs/app/`: `page.tsx` (list), `markets/new`, `markets/[id]`, `portfolio`, `api/pyth/route.ts` (server-only Hermes proxy).
-- `packages/nextjs/components/markets/`: MarketCard, StakePanel, RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, States.
-- `packages/nextjs/hooks/markets/`: useMarket(s), usePositions, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate.
-- `packages/nextjs/utils/markets/`: `units.ts` (unit boundary + gas limits), `feeds.ts`, `status.ts`, `mirror.ts`, `hashscan.ts`, `types.ts`.
+- `packages/nextjs/components/markets/`: MarketCard, StakePanel, RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States.
+- `packages/nextjs/hooks/markets/`: useMarket(s), usePositions, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate, useMarketActivity.
+- `packages/nextjs/utils/markets/`: `units.ts` (unit boundary + gas limits), `feeds.ts`, `status.ts`, `mirror.ts`, `activity.ts` (event log decoder), `hashscan.ts`, `types.ts`.
 - `packages/nextjs/contracts/deployedContracts.ts`: generated. Never edit by hand.
 
 ## Invariants that must hold
@@ -59,6 +59,8 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 - `hedera-forking` does not emulate HSS: keep the `vm.etch` mocks for unit tests and prove scheduling on real testnet via e2e.
 - HTS `burnToken` only burns from treasury, so redeem uses `wipeTokenAccount` (wipe key). No approve step exists by design.
 - Never cross a Chainlink phase boundary when walking rounds (top 16 bits of round id); walk is bounded to 48 steps.
+- Mirror node contract logs: never use the `topic1` query filter (needs a timestamp range of at most 7 days, and the zero word for market 0 matches nothing). Read logs unfiltered and match `topics[1]` on the client, as `useMarketActivity` does.
+- Read prices and balances from the target network's mirror node and relay only. No third-party price APIs: they fail in sandboxes and log console errors that break the Harness Tier 2 gate.
 - Hermes needs an API key since 2026-08-26. `PYTH_API_KEY` stays server-only in `app/api/pyth/route.ts`. The app must run fully without it.
 
 ## Safe extension points
@@ -73,7 +75,7 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 1. `yarn foundry:test` (expect 78 passing, 100 percent line coverage).
 2. `yarn next:lint`, `yarn next:check-types`, `yarn next:test`, `yarn next:build`.
 3. Touching settlement, scheduling, units, or reserve accounting: run `DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet` on testnet.
-4. Touching `.harness/` behavior: `npx hedera-harness validate`.
+4. Touching `.harness/` behavior: `yarn harness:validate` (Tiers 0 to 2).
 
 ## What not to do
 
