@@ -1,4 +1,4 @@
-import { connectorsForWallets } from "@rainbow-me/rainbowkit";
+import { type WalletList, connectorsForWallets } from "@rainbow-me/rainbowkit";
 import { metaMaskWallet, walletConnectWallet } from "@rainbow-me/rainbowkit/wallets";
 import { rainbowkitBurnerWallet } from "burner-connector";
 import * as chains from "viem/chains";
@@ -15,7 +15,7 @@ export const wagmiConnectors = () => {
     return [];
   }
 
-  const walletGroups = [
+  const walletGroups: WalletList = [
     {
       groupName: "Supported Wallets",
       wallets,
