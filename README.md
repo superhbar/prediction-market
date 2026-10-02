@@ -203,9 +203,19 @@ yarn next:build
 
 ## Verified on testnet
 
-Live deployment: `PredictionMarkets` at 0x5863781b36e7beee162152a7d8ab32fe471e105b ([Hashscan](https://hashscan.io/testnet/contract/0x5863781b36e7beee162152a7d8ab32fe471e105b)).
+Live deployment: `PredictionMarkets` at `0x5863781b36e7beee162152a7d8ab32fe471e105b` ([Hashscan](https://hashscan.io/testnet/contract/0x5863781b36e7beee162152a7d8ab32fe471e105b)).
 
-<!-- E2E_EVIDENCE -->
+Full lifecycle run with `yarn foundry:e2e:testnet` on 2026-10-02 against the deployment above (contract source verified on Sourcify, exact match). The first scheduled settlement found no Chainlink round after expiry yet, so the contract booked its own retry, which then settled the market. No bot or keeper was involved at any step.
+
+| Step | Evidence |
+|---|---|
+| Create market #0 (books the HIP-1215 settlement) | [transaction](https://hashscan.io/testnet/transaction/0x0aee085dbf4988cc6d128907b5a724fbdd6b7f561479affb9543780ab2a395e8) |
+| YES and NO position tokens (HTS, created by the contract) | [0.0.10830520](https://hashscan.io/testnet/token/0.0.10830520), [0.0.10830521](https://hashscan.io/testnet/token/0.0.10830521) |
+| Stake 5 HBAR on YES, 3 HBAR on NO | [YES](https://hashscan.io/testnet/transaction/0x3ace6113975ba9bc170e8ee3d734b4b941220d9c4bb48f2c8c026003728ea285), [NO](https://hashscan.io/testnet/transaction/0xc34327752495b176e7870af17e6c1d52640ad8bf61ab8c068e3eaf98b538910b) |
+| Scheduled settlement, executed by the network, no round yet, so it booked a retry | [schedule 0.0.10830522](https://hashscan.io/testnet/schedule/0.0.10830522) |
+| Self-booked retry, executed by the network, settled NO on Chainlink at $0.099035 | [schedule 0.0.10830705](https://hashscan.io/testnet/schedule/0.0.10830705) |
+| Redeem the winning NO position (8 HBAR) | [transaction](https://hashscan.io/testnet/transaction/0xbbcf415f91f45c307537acbeecba6795105502e5d15238d97a8fa09f941bb889) |
+| Creator withdraws the unused reserve | [transaction](https://hashscan.io/testnet/transaction/0x312ea637191036d60cf7823de275dd5bfe077471809bd279488920321bd4e04f) |
 
 ## Extending the template
 
