@@ -43,7 +43,7 @@
     "precommit": "lint-staged",
     "lint-staged": "lint-staged",
     "harness:doctor": "npx --yes hedera-harness@1.2.2 doctor",
-    "harness:validate": "npx --yes hedera-harness@1.2.2 validate",
+    "harness:validate": "npx --yes -p hedera-harness@1.2.2 -p playwright@1.63.0 hedera-harness validate",
     "harness:run": "npx --yes hedera-harness@1.2.2 run"
   },
   "packageManager": "yarn@3.2.3",

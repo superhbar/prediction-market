@@ -6,9 +6,9 @@ Binary price prediction markets on Hedera. Anyone creates a market (for example 
 npm create scaffold-hbar@latest -- --template superhbar/prediction-market
 ```
 
-![A settled market on Hedera testnet: the scheduled call booked one retry, then settled NO on Chainlink](docs/screenshots/market-detail.png)
+![A settled market on Hedera testnet: the scheduled call booked one retry, then settled NO on Chainlink, and every step is in the activity panel with a Hashscan link](docs/screenshots/market-detail.png)
 
-More screenshots: [market list](docs/screenshots/markets.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [dark theme](docs/screenshots/market-detail-dark.png). All are taken from the production build against the live testnet deployment.
+More screenshots: [an open market with the payout preview](docs/screenshots/market-open.png), [market list](docs/screenshots/markets.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [dark theme](docs/screenshots/market-detail-dark.png). All are taken from the production build against the live testnet deployment.
 
 ## What you get
 
@@ -175,13 +175,14 @@ packages/nextjs/
   app/markets/[id]/page.tsx         Market detail: pools, odds, countdowns, stake, settle, void, redeem
   app/portfolio/page.tsx            Positions across markets
   app/api/pyth/route.ts             Server-only Hermes proxy; PYTH_API_KEY never reaches the browser
-  components/markets/               MarketCard, StakePanel, RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, States
-  hooks/markets/                    useMarket, useMarkets, usePositions, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate
+  components/markets/               MarketCard, StakePanel, RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States
+  hooks/markets/                    useMarket, useMarkets, usePositions, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate, useMarketActivity
   hooks/scaffold-hbar/              Scaffold read, write, event, and transactor hooks
   utils/markets/units.ts            The single tinybar and weibar conversion boundary, plus frontend gas limits
   utils/markets/feeds.ts            Feed keys and bytes32 conversion
   utils/markets/status.ts           Derives UI status (open, awaiting-settlement, retrying, settle-available, voidable, settled, voided)
-  utils/markets/mirror.ts           Mirror node REST reads (exchange rate, account, token association, schedule status)
+  utils/markets/mirror.ts           Mirror node REST reads (exchange rate, account, token association, schedule status, contract logs)
+  utils/markets/activity.ts         Decodes PredictionMarkets event logs into the activity panel rows
   utils/markets/hashscan.ts         Hashscan and entity id link builders
 .harness/                           Harness recipe: spec, PRDs, validators (see Using Hedera Harness)
 docs/hedera-notes.md                Hedera behaviour measured on testnet (units, HTS, HIP-1215, oracles, tooling)
@@ -258,15 +259,52 @@ Full lifecycle run with `yarn foundry:e2e:testnet` on 2026-10-02 against the dep
 
 ## Using Hedera Harness
 
-`.harness/` holds the Harness recipe for this template: the feature spec, the PRDs under `.harness/prds/`, static and command validators (Tier 0 to 1), a Playwright smoke test over the core routes (Tier 2), and chain validation that reuses `yarn foundry:e2e:testnet` (Tier 3.5).
+[Hedera Harness](https://github.com/hedera-dev/hedera-harness) runs a coding agent against a recipe and only accepts the result when deterministic validators pass. This template ships its recipe in `.harness/`, and the market activity panel on every market page was built with it.
+
+| File | What it does |
+|---|---|
+| `.harness/spec.yaml` | Recipe (schema v2): agent, baseline commands, validators, Tier 3 contract, Tier 3.5 chain validation |
+| `.harness/prds/01-market-activity.md` | The feature brief, including the mirror node facts the agent needs (filter logs by `topics[1]` on the client) |
+| `.harness/validators/static.json` | Tier 0: template shape, docs, forbidden env files, required feature files |
+| `.harness/validators/yarn.json` | Tier 1: install, lint, type-check, vitest, forge tests, production build |
+| `.harness/validators/playwright-smoke.yaml` | Tier 2: boots the app and loads every route with zero console errors |
+| `.harness/acceptance-contract.json` | Tier 3: five numbered assertions graded against market 0's real testnet history |
+
+Check the recipe and run the cheap tiers (no agent, no keys):
 
 ```bash
-npx hedera-harness doctor
-npx hedera-harness validate
-npx hedera-harness run
+npx playwright@1.63.0 install chromium   # once, for the Tier 2 browser
+yarn harness:doctor
+yarn harness:validate
 ```
 
-`doctor` checks the environment, `validate` runs the static and command gates, and `run` builds a feature from `.harness/prds/` against the same validators. New features built this way inherit the testnet lifecycle check, so settlement behavior stays verified.
+`harness:doctor` lists every missing piece for a full run (agent CLI, optional packages, operator env). `harness:validate` runs Tiers 0 to 2 and passes on `main`.
+
+A full run needs the Tier 2 and Tier 3.5 extras next to the CLI, an agent CLI (`claude` by default), and an ECDSA testnet operator that funds a throwaway signer and gets the HBAR swept back at the end:
+
+```bash
+npm i -g hedera-harness@1.2.2 playwright @hiero-ledger/sdk
+export HEDERA_OPERATOR_ID=0.0.xxxxx HEDERA_OPERATOR_KEY=0x...
+hedera-harness run
+```
+
+### How the activity panel was built
+
+- Run branch: [`harness/run-market-activity-674bcd`](https://github.com/superhbar/prediction-market/tree/harness/run-market-activity-674bcd), one commit per attempt.
+- The nested `claude` CLI was not logged in on the build machine, so the run used the recipe's `generator:` override: OpenCode wrote the first pass, then agy (Claude Sonnet 4.6) took over when OpenCode's free model hit its rate limit. Tier 3 grading needs the same agent CLI, so it was done by hand; the results are below.
+- Tier 3.5 provisioned a funded ephemeral account on every attempt and swept it back (for example `0.0.10831218`, `0.0.10831341`).
+- The run ended with type-check, build, lint, tests and the static checks green, and one Tier 2 failure that was not the agent's code: the header balance and the HBAR price fetched CoinGecko and a second mirror host, which failed to resolve on the build machine. Both were fixed on `main` (the app now reads only the testnet mirror and the relay), and `yarn harness:validate` passes there with Tier 2 green on all routes.
+- The generated decoder, hook, panel and 9 unit tests landed unchanged apart from one comment.
+
+Tier 3 acceptance contract, graded by hand on the production build:
+
+| Id | Assertion | Result |
+|---|---|---|
+| C1 | Market 0 lists created, two stakes, retry booked, settled NO, redeemed, reserve withdrawn, newest first, with correct amounts | Pass: 7 entries, 5 and 3 HBAR |
+| C2 | Each entry links to the transaction that emitted it | Pass: every hash matches the mirror node logs, settlement is `0x9c2da867...` |
+| C3 | Loading and error states, page keeps working | Pass by code review (skeleton, error with Retry, failures stay inside the panel) |
+| C4 | Existing routes and the resolution strip still render | Pass |
+| C5 | A new stake appears after a real transaction | Pass with the deployer as signer: [stake on market 1](https://hashscan.io/testnet/transaction/0x8b508cde06355e3acbc1e6f5439ef0b5048373f039e7fcbcd0122a94e841618e) showed up on refresh |
 
 ## Disclaimer
 
