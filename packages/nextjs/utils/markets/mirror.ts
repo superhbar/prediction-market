@@ -18,6 +18,41 @@ export type MirrorSchedule = {
   expirationTime: string | null;
 };
 
+/** Raw contract log as returned by the mirror node results/logs endpoint. */
+export type MirrorContractLog = {
+  data: `0x${string}`;
+  topics: `0x${string}`[];
+  /** Consensus timestamp "seconds.nanos", e.g. "1697044200.123456789". */
+  timestamp: string;
+  transaction_hash: string;
+};
+
+/**
+ * Reads contract logs newest-first from the mirror node, following `links.next`
+ * up to `maxPages` pages of 100. Returns the raw logs; callers filter by market
+ * on the client via `topics[1]` (the indexed market id word). The mirror node's
+ * `topic1` query parameter is intentionally not used: it requires a timestamp
+ * range of at most 7 days while markets live up to 60 days, and the zero word
+ * (market 0) matches nothing.
+ */
+export async function fetchContractLogs(
+  mirrorBase: string,
+  contractAddress: string,
+  maxPages = 5,
+): Promise<MirrorContractLog[]> {
+  const collected: MirrorContractLog[] = [];
+  let path: string | null = `/api/v1/contracts/${contractAddress}/results/logs?order=desc&limit=100`;
+  for (let page = 0; page < maxPages && path !== null; page += 1) {
+    const data = (await getJson(mirrorBase, path)) as {
+      logs?: MirrorContractLog[];
+      links?: { next?: string | null } | null;
+    };
+    if (Array.isArray(data.logs)) collected.push(...data.logs);
+    path = data.links?.next ?? null;
+  }
+  return collected;
+}
+
 async function getJson(mirrorBase: string, path: string): Promise<unknown> {
   const response = await fetch(`${mirrorBase}${path}`, {
     signal: AbortSignal.timeout(10_000),
