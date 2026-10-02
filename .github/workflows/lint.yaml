@@ -41,5 +41,60 @@ jobs:
       - name: Check typings on nextjs
         run: yarn next:check-types
 
+      - name: Unit test nextjs
+        run: yarn next:test
+
       - name: Build nextjs
         run: yarn next:build
+
+  # Rehearses the bounty eligibility gate: scaffold this commit with the real create-scaffold-hbar CLI,
+  # exactly as `npm create scaffold-hbar@latest -- --template superhbar/prediction-market` would, then
+  # install, lint, type-check, test and build the fresh project with each supported package manager.
+  fresh-scaffold:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package-manager: [yarn, npm]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup node env
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Enable corepack for Yarn
+        run: corepack enable
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Export the committed tree like a GitHub tarball
+        run: |
+          mkdir -p "$RUNNER_TEMP/template"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/template"
+
+      - name: Scaffold with create-scaffold-hbar
+        working-directory: ${{ runner.temp }}
+        env:
+          CREATE_SCAFFOLD_HBAR_TEMPLATE_DIR: ${{ runner.temp }}/template
+        run: >
+          npx --yes create-scaffold-hbar@latest app
+          --template superhbar/prediction-market
+          --solidity-framework foundry
+          --package-manager ${{ matrix.package-manager }}
+          --skip-hedera-skills --ci
+
+      - name: Gate checks
+        working-directory: ${{ runner.temp }}/app
+        run: |
+          test ! -f template.json
+          run() { if [ "${{ matrix.package-manager }}" = yarn ]; then yarn "$@"; else npm run "$@"; fi; }
+          run lint
+          run next:check-types
+          run next:test
+          run foundry:test
+          run next:build
