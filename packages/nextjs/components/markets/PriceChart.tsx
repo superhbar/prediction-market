@@ -43,6 +43,8 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
   const strikeY = y(strike);
   const last = points[points.length - 1];
   const lastY = y(last.normalized);
+  // When the strike is the chart's maximum its label goes under the line, so it is not clipped.
+  const strikeLabelY = strikeY < PAD + 16 ? strikeY + 18 : strikeY - 8;
   const settleIndex = expiry === undefined ? -1 : points.findIndex(point => point.timestamp >= expiry);
   // Near the right edge the marker label flips to the left of its line so it is not clipped.
   const settleLabelLeft = settleIndex >= 0 && x(settleIndex) > WIDTH * 0.7;
@@ -90,7 +92,7 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
         )}
         <text
           x={8}
-          y={strikeY - 8}
+          y={strikeLabelY}
           fontSize="13"
           fill="#8259ef"
           textAnchor="start"
