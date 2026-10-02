@@ -67,8 +67,12 @@ export function decodeActivity(logs: MirrorContractLog[], abi: Abi): ActivityEnt
   for (const log of logs) {
     try {
       if (!log.topics || log.topics.length === 0 || typeof log.data !== "string") continue;
-      const decoded = decodeEventLog({ abi, data: log.data, topics: log.topics });
-      const entry = toEntry(decoded.eventName as string, decoded.args as unknown as EventArgs, log);
+      const decoded = decodeEventLog({
+        abi,
+        data: log.data as `0x${string}`,
+        topics: log.topics as [`0x${string}`, ...`0x${string}`[]],
+      });
+      const entry = toEntry(decoded.eventName as unknown as string, decoded.args as unknown as EventArgs, log);
       if (entry) entries.push(entry);
     } catch {
       // Skip unknown or undecodable logs.
