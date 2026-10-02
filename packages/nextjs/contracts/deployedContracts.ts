@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-hbar/contract";
 const deployedContracts = {
   296: {
     PredictionMarkets: {
-      address: "0xd0aa5107acd974600a0210474ed893293b639028",
+      address: "0x5863781b36e7beee162152a7d8ab32fe471e105b",
       abi: [
         {
           type: "constructor",
@@ -533,6 +533,32 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "totalPoolLiability",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "totalReserves",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "voidMarket",
           inputs: [
             {
@@ -1002,7 +1028,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 41273872,
+      deployedOnBlock: 41274450,
     },
   },
 } as const;
