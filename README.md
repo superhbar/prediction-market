@@ -6,7 +6,9 @@ Binary price prediction markets on Hedera. Anyone creates a market (for example 
 npm create scaffold-hbar@latest -- --template superhbar/prediction-market
 ```
 
-![Market page](docs/design/variant-B.png)
+![A settled market on Hedera testnet: the scheduled call booked one retry, then settled NO on Chainlink](docs/screenshots/market-detail.png)
+
+More screenshots: [market list](docs/screenshots/markets.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [dark theme](docs/screenshots/market-detail-dark.png). All are taken from the production build against the live testnet deployment.
 
 ## What you get
 
