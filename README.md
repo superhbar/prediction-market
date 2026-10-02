@@ -37,7 +37,7 @@ yarn install
 yarn next:dev
 ```
 
-Open http://localhost:3000. The frontend bindings in `packages/nextjs/contracts/deployedContracts.ts` already point at the live testnet deployment, so the app works before you deploy anything.
+Open http://localhost:3000. The frontend bindings in `packages/nextjs/contracts/deployedContracts.ts` already point at the live testnet deployment, so the app works before you deploy anything. Market 0 shows a finished lifecycle (settled NO after one self-booked retry). Markets 1 to 3 (ETH, BTC and HBAR) stay open until 16 October, 31 October and 1 November 2026, so you can stake on them straight away.
 
 Connect a wallet set to Hedera testnet (chain id 296, RPC https://testnet.hashio.io/api), for example MetaMask with the Hedera network added. For read-only browsing, no wallet is needed: every core route renders without one.
 
