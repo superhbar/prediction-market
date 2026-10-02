@@ -1,11 +1,18 @@
 {
-  "name": "blank",
-  "description": "Minimal Scaffold-HBAR starter: Next.js, Hardhat or Foundry, sample HTS contracts, no opinionated product UI.",
+  "name": "prediction-market",
+  "description": "Oracle-settled prediction markets on Hedera: HTS position tokens, HIP-1215 self-scheduled settlement on Chainlink, optional Pyth fallback.",
   "create-scaffold-hbar": {
     "capabilities": {
-      "frontend": ["nextjs-app"],
-      "solidityFramework": ["foundry", "hardhat"],
-      "packageManager": ["yarn", "npm"]
+      "frontend": [
+        "nextjs-app"
+      ],
+      "solidityFramework": [
+        "foundry"
+      ],
+      "packageManager": [
+        "yarn",
+        "npm"
+      ]
     },
     "defaults": {
       "frontend": "nextjs-app",
