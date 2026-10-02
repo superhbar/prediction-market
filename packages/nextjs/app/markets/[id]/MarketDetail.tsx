@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ActivityPanel } from "~~/components/markets/ActivityPanel";
 import { Countdown } from "~~/components/markets/Countdown";
 import { OddsBar } from "~~/components/markets/OddsBar";
 import { PriceChart } from "~~/components/markets/PriceChart";
@@ -83,6 +84,7 @@ export function MarketDetail({ id }: { id: string }) {
             <PriceChart points={points} strike={market.strike} feedLabel={feedLabel} expiry={market.expiry} />
           )}
           <SettlementTimeline marketId={Number(id)} market={market} roundAvailable={roundAvailable} />
+          <ActivityPanel marketId={id} />
         </div>
         <div className="lg:col-span-5 order-first lg:order-none">
           <div className="lg:sticky lg:top-6">
