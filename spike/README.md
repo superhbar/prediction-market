@@ -14,6 +14,7 @@ Run on Hedera testnet (chain 296) through `https://testnet.hashio.io/api` on 202
 | Gas for `scheduleCall` in a normal transaction | About 1.46M gas. A 600k limit fails with `INSUFFICIENT_GAS` inside `0x16b` | tx `0xec13f9…` (fail), `0xb595d5…` (ok) |
 | Scheduled call runs on time | Yes. It executes as a `CONTRACTCALL` with `scheduled=true`, and the contract pays a 0.022 HBAR fee | mirror node transactions for the spike contract |
 | A scheduled call books the next one (self-rescheduling) | Works when the scheduled call has a 2.5M gas limit. The booking from inside the scheduled call cost the contract 1.17 HBAR, and the next hop ran on time for 0.022 HBAR. A 1.2M limit is too low to book. | `hop(2, 30, 2500000)`, hops went 3 to 5 |
+| Who `msg.sender` is inside a scheduled call | The contract itself. `msg.sender`, `tx.origin` and `address(this)` all equal the contract's EVM address, so `msg.sender == address(this)` identifies a scheduled call | `WhoAmI.record()` |
 | Token creation from a contract (contract is treasury, supply key and wipe key) | 190k gas plus an 11.45 HBAR fee. Testnet rate: $1 = 9.61 HBAR | `createToken` |
 | Cost of mint and transfer | Mint 44k gas, transfer 43k gas. The first transfer to a new holder costs about 750k gas because of auto-association | `mintOnly`, `transferTo` |
 | Redeem without an approval step | Works. `wipeTokenAccount` called by the contract (as wipe key) removed 40 of a holder's 100 tokens, and total supply dropped to 60 | `wipeFrom` |
