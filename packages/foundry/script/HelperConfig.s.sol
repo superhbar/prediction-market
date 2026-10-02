@@ -96,8 +96,8 @@ abstract contract HelperConfig {
             gracePeriod: 24 hours,
             minDuration: 5 minutes,
             maxDuration: 60 days,
-            // 3 retries x 1.5 HBAR plus 4 scheduled executions x 0.05 HBAR.
-            minReserve: 5e8,
+            // 3 retries x 1.5 HBAR plus 4 scheduled executions x 0.5 HBAR.
+            minReserve: 7e8,
             retryCostEstimate: 1.5e8
         });
     }

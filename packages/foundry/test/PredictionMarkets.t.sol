@@ -759,6 +759,44 @@ contract PredictionMarketsTest is Test {
         pm.withdrawReserve(marketId);
     }
 
+    function test_WithdrawReserve_CapsAtSurplusSoTradersStayWhole() public {
+        uint256 marketId = _settledYesMarket();
+        uint256 recorded = pm.getMarket(marketId).reserve;
+        // Simulate network fees that cost more than the reserve estimated: 1 HBAR leaves the contract.
+        uint256 shortfall = 1e8;
+        vm.deal(address(pm), address(pm).balance - shortfall);
+
+        uint256 creatorBefore = CREATOR.balance;
+        vm.prank(CREATOR);
+        pm.withdrawReserve(marketId);
+        assertEq(CREATOR.balance, creatorBefore + recorded - shortfall);
+        assertEq(pm.totalReserves(), 0);
+
+        // Winners still receive the full pool after the creator absorbed the shortfall.
+        vm.prank(ALICE);
+        pm.redeem(marketId, true, 6e8);
+        vm.prank(BOB);
+        pm.redeem(marketId, true, 4e8);
+        assertEq(pm.totalPoolLiability(), 0);
+    }
+
+    function test_WithdrawReserve_RevertsWhenNothingIsAvailable() public {
+        uint256 marketId = _settledYesMarket();
+        vm.deal(address(pm), pm.totalPoolLiability());
+        vm.prank(CREATOR);
+        vm.expectRevert(PredictionMarkets.NoReserve.selector);
+        pm.withdrawReserve(marketId);
+    }
+
+    function test_Liability_TracksStakesAndPayouts() public {
+        uint256 marketId = _settledYesMarket();
+        assertEq(pm.totalPoolLiability(), 20e8);
+        assertEq(pm.totalReserves(), pm.getMarket(marketId).reserve);
+        vm.prank(ALICE);
+        pm.redeem(marketId, true, 6e8);
+        assertEq(pm.totalPoolLiability(), 20e8 - 12e8);
+    }
+
     function test_WithdrawReserve_RevertsNonCreator() public {
         uint256 marketId = _settledYesMarket();
         vm.prank(ALICE);

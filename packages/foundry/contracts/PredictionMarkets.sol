@@ -70,9 +70,10 @@ contract PredictionMarkets is ReentrancyGuard {
     uint256 private constant SUPPLY_AND_WIPE_KEY = (1 << 4) | (1 << 3);
     /// @notice HTS auto-renew period for position tokens, 90 days.
     int64 private constant AUTO_RENEW_PERIOD = 7_776_000;
-    /// @notice Reserve charged for each scheduled settle execution. The network bills the contract about
-    ///         0.022 HBAR per execution (measured on testnet); 0.05 HBAR leaves headroom.
-    uint256 public constant SCHEDULED_EXECUTION_COST = 5e6;
+    /// @notice Reserve charged for each scheduled settle execution. The network bills the contract for the gas
+    ///         used: a settle measured 127k gas (0.104 HBAR at 82 tinybar/gas) and a full 48-step round walk
+    ///         stays under 0.5 HBAR.
+    uint256 public constant SCHEDULED_EXECUTION_COST = 5e7;
     /// @notice Upper bound on the Chainlink round walk-back.
     uint256 private constant MAX_WALK_STEPS = 48;
 
@@ -125,6 +126,10 @@ contract PredictionMarkets is ReentrancyGuard {
     uint256 private _marketCount;
     /// @notice Feed keys in constructor order.
     bytes32[] private _feedKeys;
+    /// @notice HBAR owed to traders across all markets: stakes in, payouts out. Never used for fees.
+    uint256 public totalPoolLiability;
+    /// @notice Sum of all markets' recorded reserves.
+    uint256 public totalReserves;
 
     /// @notice Thrown when a feed key has no registered feed or has an empty Chainlink address.
     error FeedNotFound(bytes32 feedKey);
@@ -251,6 +256,7 @@ contract PredictionMarkets is ReentrancyGuard {
         uint256 reserve = msg.value - spent;
         if (reserve < minReserve) revert InsufficientReserve(reserve, minReserve);
         address schedule = _bookSettlement(marketId, uint256(expiry) + settlementDelay);
+        totalReserves += reserve;
 
         _markets[marketId] = Market({
             feedKey: feedKey,
@@ -301,6 +307,7 @@ contract PredictionMarkets is ReentrancyGuard {
         } else {
             m.noPool += msg.value;
         }
+        totalPoolLiability += msg.value;
         // forge-lint: disable-next-line(reentrancy-events)
         emit Staked(marketId, msg.sender, yes, msg.value);
     }
@@ -318,7 +325,7 @@ contract PredictionMarkets is ReentrancyGuard {
         // The network bills each scheduled execution to this contract, so charge it to the market's reserve
         // rather than to the shared balance that backs every pool.
         if (msg.sender == address(this)) {
-            m.reserve -= m.reserve < SCHEDULED_EXECUTION_COST ? m.reserve : SCHEDULED_EXECUTION_COST;
+            _chargeReserve(m, SCHEDULED_EXECUTION_COST);
         }
 
         if (m.yesPool == 0 || m.noPool == 0) {
@@ -334,7 +341,7 @@ contract PredictionMarkets is ReentrancyGuard {
                     HSS.scheduleCall(address(this), retryAt, SETTLE_GAS, 0, abi.encodeCall(this.settle, (marketId)));
                 if (rc != SUCCESS) revert ScheduleFailed(rc);
                 m.retriesLeft -= 1;
-                m.reserve -= retryCostEstimate;
+                _chargeReserve(m, retryCostEstimate);
                 m.schedule = schedule;
                 // forge-lint: disable-next-line(reentrancy-events)
                 emit SettlementRetryScheduled(marketId, schedule, retryAt, m.retriesLeft);
@@ -418,6 +425,7 @@ contract PredictionMarkets is ReentrancyGuard {
         address token = yes ? m.yesToken : m.noToken;
         int64 rc = IHtsWipe(address(HTS)).wipeTokenAccount(token, msg.sender, wipeAmount);
         if (rc != SUCCESS) revert TokenWipeFailed(rc);
+        totalPoolLiability -= payout;
         (bool ok,) = msg.sender.call{ value: payout }("");
         if (!ok) revert PayoutTransferFailed();
         // forge-lint: disable-next-line(reentrancy-events)
@@ -425,14 +433,22 @@ contract PredictionMarkets is ReentrancyGuard {
     }
 
     /// @notice Withdraws a settled or voided market's leftover reserve to its creator, exactly once.
+    /// @dev Network fees are only estimated in the reserve. Paying at most what the balance holds beyond every
+    ///      trader pool and every other market's reserve means an underestimate is absorbed by this creator and
+    ///      never by traders.
     /// @param marketId The market whose reserve to withdraw.
     function withdrawReserve(uint256 marketId) external nonReentrant {
         Market storage m = _getMarket(marketId);
         if (msg.sender != m.creator) revert NotMarketCreator();
         if (m.state != State.Settled && m.state != State.Voided) revert MarketNotSettled();
-        uint256 amount = m.reserve;
-        if (amount == 0) revert NoReserve();
+        uint256 recorded = m.reserve;
+        if (recorded == 0) revert NoReserve();
+        uint256 owedToOthers = totalPoolLiability + totalReserves - recorded;
+        uint256 available = address(this).balance > owedToOthers ? address(this).balance - owedToOthers : 0;
+        uint256 amount = recorded < available ? recorded : available;
         m.reserve = 0;
+        totalReserves -= recorded;
+        if (amount == 0) revert NoReserve();
         (bool ok,) = msg.sender.call{ value: amount }("");
         if (!ok) revert PayoutTransferFailed();
         // forge-lint: disable-next-line(reentrancy-events)
@@ -590,6 +606,13 @@ contract PredictionMarkets is ReentrancyGuard {
         found = true;
         price = PriceMath.normalizeChainlink(answer, feedDecimals);
         priceTime = updatedAt;
+    }
+
+    /// @notice Deducts an estimated network cost from a market's reserve, saturating at zero.
+    function _chargeReserve(Market storage m, uint256 cost) internal {
+        uint256 charged = m.reserve < cost ? m.reserve : cost;
+        m.reserve -= charged;
+        totalReserves -= charged;
     }
 
     /// @notice Marks a market settled and emits its outcome.
