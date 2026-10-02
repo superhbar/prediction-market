@@ -33,9 +33,9 @@ deploy:
 			forge script $(DEPLOY_SCRIPT) --rpc-url localhost --account $(ETH_KEYSTORE_ACCOUNT) --broadcast --ffi; \
 		fi \
 	elif [ "$(RPC_URL)" = "hedera_testnet" ]; then \
-		forge script $(DEPLOY_SCRIPT) --rpc-url https://testnet.hashio.io/api --account $(ETH_KEYSTORE_ACCOUNT) --broadcast --ffi --slow --legacy; \
+		node scripts-js/deployHedera.js --network hedera_testnet --account $(ETH_KEYSTORE_ACCOUNT); \
 	elif [ "$(RPC_URL)" = "hedera_mainnet" ]; then \
-		forge script $(DEPLOY_SCRIPT) --rpc-url https://mainnet.hashio.io/api --account $(ETH_KEYSTORE_ACCOUNT) --broadcast --ffi --slow --legacy; \
+		node scripts-js/deployHedera.js --network hedera_mainnet --account $(ETH_KEYSTORE_ACCOUNT); \
 	else \
 		forge script $(DEPLOY_SCRIPT) --rpc-url $(RPC_URL) --account $(ETH_KEYSTORE_ACCOUNT) --broadcast --ffi --slow; \
 	fi

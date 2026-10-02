@@ -19,4 +19,11 @@ contract DeployScript is ScaffoldETHDeploy, HelperConfig {
         PredictionMarkets markets = new PredictionMarkets(feedKeys, feeds, pyth, cfg);
         deployments.push(Deployment({ name: "PredictionMarkets", addr: address(markets) }));
     }
+
+    /// @notice ABI-encoded constructor arguments for the current chain id. Used by scripts-js/deployHedera.js,
+    ///         which deploys with `cast send --create` because `forge script` cannot broadcast through Hashio.
+    function constructorArgs() external view returns (bytes memory) {
+        (bytes32[] memory feedKeys, Feed[] memory feeds, address pyth, Config memory cfg) = getConfig();
+        return abi.encode(feedKeys, feeds, pyth, cfg);
+    }
 }
