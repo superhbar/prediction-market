@@ -26,7 +26,6 @@
       ".env",
       "packages/nextjs/.env",
       "packages/nextjs/.env.local",
-      "packages/foundry/.env",
       "packages/hardhat"
     ]
   },
