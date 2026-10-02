@@ -72,6 +72,12 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
+      # create-scaffold-hbar refuses to run without a git identity, because it makes the initial commit.
+      - name: Configure git identity
+        run: |
+          git config --global user.name "ci"
+          git config --global user.email "ci@users.noreply.github.com"
+
       - name: Export the committed tree like a GitHub tarball
         run: |
           mkdir -p "$RUNNER_TEMP/template"
