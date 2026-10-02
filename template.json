@@ -19,29 +19,66 @@
       "solidityFramework": "foundry",
       "packageManager": "yarn"
     },
+    "envVars": [
+      {
+        "key": "NEXT_PUBLIC_HEDERA_TESTNET_RPC_URL",
+        "description": "JSON-RPC endpoint the frontend uses on Hedera testnet."
+      },
+      {
+        "key": "NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID",
+        "description": "WalletConnect project id for RainbowKit. Required for wallet connect."
+      },
+      {
+        "key": "PYTH_API_KEY",
+        "description": "Optional, server-only: enables the Settle with Pyth fallback via the Next.js API route. The app runs fully without it."
+      },
+      {
+        "key": "PYTH_HERMES_URL",
+        "description": "Optional: overrides the Pyth Hermes endpoint (default https://hermes.pyth.network)."
+      },
+      {
+        "key": "DEPLOYER_PRIVATE_KEY",
+        "description": "Funded testnet ECDSA key for the end-to-end lifecycle check (DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet). Automation only, never commit it."
+      }
+    ],
     "outro": {
       "sections": [
         {
-          "title": "Next steps",
+          "title": "Run it now",
+          "steps": [
+            {
+              "label": "Start the frontend",
+              "command": "{run:next:dev}"
+            },
+            {
+              "text": "Open http://localhost:3000. The app ships pointing at a live testnet deployment, so it works before you deploy anything."
+            }
+          ]
+        },
+        {
+          "title": "Deploy your own",
           "steps": [
             {
               "label": "Generate or import a deployer account",
               "command": "{run:framework:account:generate}"
             },
             {
-              "label": "Start a local chain",
-              "command": "{run:framework:chain}"
+              "text": "Get testnet HBAR at https://portal.hedera.com (1000 HBAR per day; a market needs about 30 HBAR)."
             },
             {
-              "label": "Deploy contracts to that node",
-              "command": "{run:framework:deploy} --network localhost"
+              "label": "Deploy to Hedera testnet",
+              "command": "{run:framework:deploy} --network hedera_testnet"
             },
             {
-              "label": "Start the frontend",
-              "command": "{run:next:dev}"
-            },
+              "text": "Run the lifecycle check: DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet (about 17 minutes, prints Hashscan links)."
+            }
+          ]
+        },
+        {
+          "title": "Learn the pattern",
+          "steps": [
             {
-              "text": "For Hedera testnet/mainnet deploy and verify, see the Scaffold HBAR docs and your chosen package README under packages/hardhat or packages/foundry."
+              "text": "Read How it works in the README (lifecycle diagram, first-round-at-or-after-expiry rule, HIP-1215 retries, tinybar units), then AGENTS.md for invariants and safe extension points."
             }
           ]
         }
