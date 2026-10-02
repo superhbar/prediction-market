@@ -1,4 +1,6 @@
 import { FlatCompat } from "@eslint/eslintrc";
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import nextTypescript from "eslint-config-next/typescript";
 import prettierPlugin from "eslint-plugin-prettier";
 import { defineConfig } from "eslint/config";
 import path from "node:path";
@@ -12,10 +14,13 @@ const compat = new FlatCompat({
 
 export default defineConfig([
   {
+    ignores: [".next/**", "out/**", "node_modules/**", "next-env.d.ts"],
+  },
+  {
     plugins: {
       prettier: prettierPlugin,
     },
-    extends: compat.extends("next/core-web-vitals", "next/typescript", "prettier"),
+    extends: [...nextCoreWebVitals, ...nextTypescript, ...compat.extends("prettier")],
 
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
