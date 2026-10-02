@@ -22,19 +22,19 @@
     "envVars": [
       {
         "key": "NEXT_PUBLIC_HEDERA_TESTNET_RPC_URL",
-        "description": "JSON-RPC endpoint the frontend uses on Hedera testnet."
+        "description": "packages/nextjs/.env.local: JSON-RPC endpoint the frontend uses on Hedera testnet (default https://testnet.hashio.io/api)."
       },
       {
         "key": "NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID",
-        "description": "WalletConnect project id for RainbowKit. Required for wallet connect."
+        "description": "packages/nextjs/.env.local: WalletConnect project id for RainbowKit (a shared default is built in for local testing)."
       },
       {
         "key": "PYTH_API_KEY",
-        "description": "Optional, server-only: enables the Settle with Pyth fallback via the Next.js API route. The app runs fully without it."
+        "description": "packages/nextjs/.env.local, optional, server-only: enables the Settle with Pyth fallback via the Next.js API route. The app runs fully without it."
       },
       {
         "key": "PYTH_HERMES_URL",
-        "description": "Optional: overrides the Pyth Hermes endpoint (default https://hermes.pyth.network)."
+        "description": "packages/nextjs/.env.local, optional: overrides the Pyth Hermes endpoint (default https://hermes.pyth.network)."
       },
       {
         "key": "DEPLOYER_PRIVATE_KEY",

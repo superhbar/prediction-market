@@ -32,7 +32,7 @@ Run against the shipped testnet deployment (no deploy needed):
 
 ```bash
 yarn install
-yarn next:start
+yarn next:dev
 ```
 
 Open http://localhost:3000. The frontend bindings in `packages/nextjs/contracts/deployedContracts.ts` already point at the live testnet deployment, so the app works before you deploy anything.
@@ -41,7 +41,7 @@ Connect a wallet set to Hedera testnet (chain id 296, RPC https://testnet.hashio
 
 ## Deploy your own
 
-Create or import a deployer keystore (the address must be a Hedera-created account, funded through the Portal):
+Create or import a deployer keystore, then fund its address with testnet HBAR. Sending HBAR to a new EVM address creates its Hedera account automatically.
 
 ```bash
 yarn foundry:account:generate
@@ -70,7 +70,7 @@ The script creates a short market, stakes both sides, waits for the scheduled se
 |---|---|---|---|
 | `NEXT_PUBLIC_HEDERA_TESTNET_RPC_URL` | `packages/nextjs/.env` | No (has a default) | JSON-RPC endpoint the frontend uses on testnet |
 | `NEXT_PUBLIC_HEDERA_MAINNET_RPC_URL` | `packages/nextjs/.env` | No (has a default) | JSON-RPC endpoint the frontend uses on mainnet |
-| `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | `packages/nextjs/.env` | Yes, for wallet connect | WalletConnect project id for RainbowKit |
+| `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | `packages/nextjs/.env` | No (shared default for local testing; set your own for production) | WalletConnect project id for RainbowKit |
 | `PYTH_API_KEY` | `packages/nextjs/.env` | No | Server-only key for the Pyth Hermes proxy at `app/api/pyth`. Without it the app runs fully and the fallback button explains how to enable it |
 | `PYTH_HERMES_URL` | `packages/nextjs/.env` | No | Override for the Pyth Hermes endpoint (default https://hermes.pyth.network) |
 | `HEDERA_RPC_URL` | `packages/foundry/.env` | No (has a default) | RPC used by fork tests (default https://testnet.hashio.io/api) |
@@ -155,7 +155,7 @@ packages/foundry/
   contracts/PredictionMarkets.sol   One contract, all markets; treasury, supply key, wipe key
   contracts/libraries/PriceMath.sol Price normalization (Chainlink decimals, Pyth expo to 1e18)
   contracts/interfaces/             IAggregatorV3, IPyth, IHederaScheduleService, IHtsWipe
-  script/Deploy.s.sol               Deploys PredictionMarkets with HelperConfig (used on localhost)
+  script/Deploy.s.sol               Builds the deploy with HelperConfig; also encodes constructor args for deployHedera.js
   script/HelperConfig.s.sol         Single source for feeds (HBAR/BTC/ETH, testnet and mainnet) and timing config
   script/DeployHelpers.s.sol        Scaffold deploy runner
   test/PredictionMarkets.t.sol      State machine, oracles, payouts, reserve accounting, fuzz tests
@@ -177,7 +177,7 @@ packages/nextjs/
   utils/markets/units.ts            The single tinybar and weibar conversion boundary, plus frontend gas limits
   utils/markets/feeds.ts            Feed keys and bytes32 conversion
   utils/markets/status.ts           Derives UI status (open, awaiting-settlement, retrying, settle-available, voidable, settled, voided)
-  utils/markets/mirror.ts           Mirror node REST reads (schedule status, event history)
+  utils/markets/mirror.ts           Mirror node REST reads (exchange rate, account, token association, schedule status)
   utils/markets/hashscan.ts         Hashscan and entity id link builders
 .harness/                           Harness recipe: spec, PRDs, validators (see Using Hedera Harness)
 ```
@@ -236,7 +236,7 @@ Live deployment: `PredictionMarkets` at 0x5863781b36e7beee162152a7d8ab32fe471e10
 | "Live price is unavailable" on the create form | Chainlink read failed or the feed address is wrong for the connected network | Check the network (testnet 296, mainnet 295), compare the address with `packages/foundry/script/HelperConfig.s.sol`, and retry. Creation still works with a manual strike |
 | Market stuck awaiting settlement | No Chainlink round at or after expiry exists yet, or retries ran out | Wait for the next retry, call `settle` once a round exists, or use the Pyth fallback. After the 24 hour grace period anyone can void |
 | "Settle with Pyth" button disabled or explains setup | `PYTH_API_KEY` is not set (Hermes requires an API key since 2026-08-26) | Set `PYTH_API_KEY` in `packages/nextjs/.env` and retry. Chainlink settlement and voiding work without it |
-| Stake reverts with `TOKEN_NOT_ASSOCIATED_TO_ACCOUNT` | The staker's account is not associated with the position token | Use the one-click association prompt in the stake panel, then stake again. First stake per token per account costs about 0.65 HBAR (auto-association) versus about 0.04 HBAR normally |
+| Stake reverts with `TokenTransferFailed(184)` | Response code 184 is `TOKEN_NOT_ASSOCIATED_TO_ACCOUNT`: the staker's account has no free auto-association slot and is not associated with the position token | Use the one-click association prompt in the stake panel, then stake again. First stake per token per account costs about 0.65 HBAR (auto-association) versus about 0.04 HBAR normally |
 | Balance too low after using the faucet | The faucet gives 10 HBAR per day; a market needs about 23 HBAR in token fees plus a 7 HBAR reserve | Get a Hedera Portal testnet account (portal.hedera.com, 1000 HBAR per day) |
 | Wallet is on the wrong network | MetaMask points at mainnet or a local node while the app targets testnet | Switch the wallet to Hedera testnet (chain id 296, RPC https://testnet.hashio.io/api) and reload |
 
