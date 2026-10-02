@@ -36,7 +36,12 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
 
   const yes = side === "YES";
   const token: Address = yes ? market.yesToken : market.noToken;
-  const [nowMs] = useState(() => Date.now());
+  // Re-check the clock so the form closes when the market expires while the page is open.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 5_000);
+    return () => clearInterval(timer);
+  }, []);
   const tradingOpen = market.state === MarketState.Open && nowMs < Number(market.expiry) * 1000;
   const amountValid = isPositiveDecimal(amount);
   const amountTinybar = amountValid ? hbarToTinybar(amount) : undefined;

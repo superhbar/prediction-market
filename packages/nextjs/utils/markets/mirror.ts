@@ -29,7 +29,8 @@ export type MirrorContractLog = {
 
 /**
  * Reads contract logs newest-first from the mirror node, following `links.next`
- * up to `maxPages` pages of 100. Returns the raw logs; callers filter by market
+ * up to `maxPages` pages of 100, or until a page holds a log matching `stopWhen`.
+ * Returns the raw logs; callers filter by market
  * on the client via `topics[1]` (the indexed market id word). The mirror node's
  * `topic1` query parameter is intentionally not used: it requires a timestamp
  * range of at most 7 days while markets live up to 60 days, and the zero word
@@ -38,7 +39,8 @@ export type MirrorContractLog = {
 export async function fetchContractLogs(
   mirrorBase: string,
   contractAddress: string,
-  maxPages = 5,
+  maxPages = 20,
+  stopWhen?: (log: MirrorContractLog) => boolean,
 ): Promise<MirrorContractLog[]> {
   const collected: MirrorContractLog[] = [];
   let path: string | null = `/api/v1/contracts/${contractAddress}/results/logs?order=desc&limit=100`;
@@ -47,7 +49,10 @@ export async function fetchContractLogs(
       logs?: MirrorContractLog[];
       links?: { next?: string | null } | null;
     };
-    if (Array.isArray(data.logs)) collected.push(...data.logs);
+    const logs = Array.isArray(data.logs) ? data.logs : [];
+    collected.push(...logs);
+    // Newest first: once the stop log is seen (a market's creation), older pages cannot matter.
+    if (stopWhen && logs.some(stopWhen)) break;
     path = data.links?.next ?? null;
   }
   return collected;

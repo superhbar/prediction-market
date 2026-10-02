@@ -2,12 +2,17 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { isValidMarketId } from "./useMarket";
+import { toEventSelector } from "viem";
 import { useDeployedContractInfo, useTargetNetwork } from "~~/hooks/scaffold-hbar";
 import { type ActivityEntry, decodeActivity } from "~~/utils/markets/activity";
 import { mirrorBaseForChain } from "~~/utils/markets/hashscan";
 import { fetchContractLogs } from "~~/utils/markets/mirror";
 
 const REFRESH_MS = 30_000;
+/** topic0 of MarketCreated, the oldest event of every market: paging stops once it is found. */
+const MARKET_CREATED_TOPIC = toEventSelector(
+  "MarketCreated(uint256,bytes32,int256,uint64,address,address,address,address,uint256)",
+);
 
 type ActivitySnapshot = {
   key: string;
@@ -53,7 +58,12 @@ export function useMarketActivity(marketId: string): {
   useEffect(() => {
     if (key === "" || !abi || !address || snapshot?.key === key) return;
     let cancelled = false;
-    fetchContractLogs(mirrorBaseForChain(targetNetwork.id), address)
+    fetchContractLogs(
+      mirrorBaseForChain(targetNetwork.id),
+      address,
+      20,
+      log => log.topics?.[0] === MARKET_CREATED_TOPIC && logMatchesMarket(log.topics, marketId),
+    )
       .then(logs => {
         if (cancelled) return;
         setSnapshot({
