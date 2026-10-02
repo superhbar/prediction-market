@@ -84,7 +84,7 @@ export function MarketDetail({ id }: { id: string }) {
           )}
           <SettlementTimeline marketId={Number(id)} market={market} roundAvailable={roundAvailable} />
         </div>
-        <div className="lg:col-span-5">
+        <div className="lg:col-span-5 order-first lg:order-none">
           <div className="lg:sticky lg:top-6">
             <StakePanel marketId={Number(id)} market={market} />
             <RedeemPanel marketId={Number(id)} market={market} />
