@@ -17,8 +17,9 @@ routes:
     path: /markets/new
   - name: portfolio
     path: /portfolio
-  - name: debug
-    path: /debug
+  # /debug is left out on purpose: the upstream @scaffold-hbar-ui/debug-contracts package fetches a
+  # USD price from CoinGecko itself and logs a console error wherever CoinGecko is unreachable or
+  # rate-limited, which is outside this template's code. The route still renders (HTTP 200).
   - name: missing-market
     path: /markets/999999
 forbidden:

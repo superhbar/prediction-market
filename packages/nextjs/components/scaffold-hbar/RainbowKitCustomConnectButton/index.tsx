@@ -2,11 +2,11 @@
 
 // @refresh reset
 import { AddressInfoDropdown } from "./AddressInfoDropdown";
+import { HbarBalance } from "./HbarBalance";
 import { RevealBurnerPKModal } from "./RevealBurnerPKModal";
 import { SetBurnerPKModal } from "./SetBurnerPKModal";
 import { WrongNetworkDropdown } from "./WrongNetworkDropdown";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { Balance } from "@scaffold-hbar-ui/components";
 import { Address } from "viem";
 import { useNetworkColor } from "~~/hooks/scaffold-hbar";
 import { useTargetNetwork } from "~~/hooks/scaffold-hbar/useTargetNetwork";
@@ -45,15 +45,7 @@ export const RainbowKitCustomConnectButton = () => {
               return (
                 <>
                   <div className="hidden sm:flex flex-col items-center mr-2">
-                    <Balance
-                      address={account.address as Address}
-                      style={{
-                        minHeight: "0",
-                        height: "auto",
-                        fontSize: "0.8em",
-                        color: "var(--color-base-content)",
-                      }}
-                    />
+                    <HbarBalance address={account.address as Address} />
                     <span className="text-xs" style={{ color: networkColor }}>
                       {chain.name}
                     </span>
