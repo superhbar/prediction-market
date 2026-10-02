@@ -1,0 +1,77 @@
+import { deriveStatus, matchesFilter, statusLabel } from "./status";
+import type { Market, MarketConfig } from "./types";
+import { describe, expect, it } from "vitest";
+
+const config: Pick<MarketConfig, "settlementDelay" | "gracePeriod" | "maxRetries"> = {
+  settlementDelay: 60n,
+  gracePeriod: 86_400n,
+  maxRetries: 2,
+};
+
+function market(overrides: Partial<Market>): Market {
+  return {
+    feedKey: "0x484241522f55534400000000000000000000000000000000000000000000000000",
+    strike: 300000000000000000n,
+    expiry: 1_000_000n,
+    creator: "0x0000000000000000000000000000000000000001",
+    yesToken: "0x0000000000000000000000000000000000000002",
+    noToken: "0x0000000000000000000000000000000000000003",
+    yesPool: 0n,
+    noPool: 0n,
+    reserve: 0n,
+    state: 0,
+    outcome: 0,
+    source: 0,
+    settlementPrice: 0n,
+    settlementTime: 0n,
+    retriesLeft: 2,
+    schedule: "0x0000000000000000000000000000000000000004",
+    ...overrides,
+  };
+}
+
+describe("deriveStatus", () => {
+  it("reports open before expiry", () => {
+    expect(deriveStatus(market({}), 999_000n, config)).toBe("open");
+  });
+
+  it("reports awaiting-settlement right after expiry", () => {
+    expect(deriveStatus(market({}), 1_000_010n, config)).toBe("awaiting-settlement");
+  });
+
+  it("reports settle-available after the settlement delay", () => {
+    expect(deriveStatus(market({}), 1_000_061n, config)).toBe("settle-available");
+  });
+
+  it("reports retrying once a retry was booked", () => {
+    expect(deriveStatus(market({ retriesLeft: 1 }), 1_000_061n, config)).toBe("retrying");
+  });
+
+  it("reports voidable after the grace period", () => {
+    expect(deriveStatus(market({}), 1_086_401n, config)).toBe("voidable");
+  });
+
+  it("reports settled and voided terminal states", () => {
+    expect(deriveStatus(market({ state: 1, outcome: 1 }), 999_000n, config)).toBe("settled");
+    expect(deriveStatus(market({ state: 2 }), 999_000n, config)).toBe("voided");
+  });
+});
+
+describe("matchesFilter", () => {
+  it("buckets statuses into list filters", () => {
+    expect(matchesFilter("open", "open")).toBe(true);
+    expect(matchesFilter("retrying", "awaiting")).toBe(true);
+    expect(matchesFilter("voidable", "awaiting")).toBe(true);
+    expect(matchesFilter("settled", "settled")).toBe(true);
+    expect(matchesFilter("voided", "voided")).toBe(true);
+    expect(matchesFilter("open", "settled")).toBe(false);
+    expect(matchesFilter("open", "all")).toBe(true);
+  });
+});
+
+describe("statusLabel", () => {
+  it("labels every status", () => {
+    expect(statusLabel("settle-available")).toBe("Settle available");
+    expect(statusLabel("voidable")).toBe("Voidable");
+  });
+});

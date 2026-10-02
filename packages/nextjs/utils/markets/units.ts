@@ -1,0 +1,84 @@
+import { formatUnits, parseEther, parseUnits } from "viem";
+
+/**
+ * Unit conversions for the prediction market frontend.
+ *
+ * Wallets and JSON-RPC use weibar (18 decimals). The PredictionMarkets
+ * contract sees tinybar (8 decimals): `msg.value` inside the EVM is already
+ * tinybar, and every amount the contract returns (pools, reserve,
+ * quotePayout, token balances) is tinybar. Prices (strike,
+ * settlementPrice) are 1e18 fixed point. All conversions live here.
+ */
+
+/** Tinybar decimals: every contract amount is in units of 1e-8 HBAR. */
+export const TINYBAR_DECIMALS = 8;
+
+/** Fixed-point decimals for strike and settlement prices. */
+export const PRICE_DECIMALS = 18;
+
+/** Explicit gas limits: Hashio estimation is unreliable for HTS/HSS calls. */
+export const GAS = {
+  createMarket: 3_000_000,
+  stake: 1_500_000,
+  settle: 1_000_000,
+  settleWithPyth: 1_000_000,
+  redeem: 800_000,
+  voidMarket: 300_000,
+  withdrawReserve: 300_000,
+  /** Unmeasured: HIP-719 associate() on a position token. */
+  associate: 300_000,
+} as const;
+
+/** Tinybar amount to a human HBAR string, e.g. 123456789n -> "1.23456789". */
+export function tinybarToHbar(amount: bigint): string {
+  return formatUnits(amount, TINYBAR_DECIMALS);
+}
+
+/** Tinybar amount to HBAR trimmed to 4 decimals for display, e.g. "1.2345 HBAR". */
+export function formatHbar(amount: bigint): string {
+  const hbar = Number(formatUnits(amount, TINYBAR_DECIMALS));
+  return `${hbar.toLocaleString("en-US", { maximumFractionDigits: 4 })} HBAR`;
+}
+
+/** Human HBAR string to tinybar, e.g. "1.5" -> 150000000n. */
+export function hbarToTinybar(hbar: string): bigint {
+  return parseUnits(hbar.trim() === "" ? "0" : hbar.trim(), TINYBAR_DECIMALS);
+}
+
+/** Human HBAR string to weibar for transaction `value`, e.g. "1.5" -> 1500000000000000000n. */
+export function hbarToWeibar(hbar: string): bigint {
+  return parseEther(hbar.trim() === "" ? "0" : hbar.trim());
+}
+
+/** Tinybar amount to weibar for comparison with wallet values. */
+export function tinybarToWeibar(amount: bigint): bigint {
+  return amount * 10n ** 10n;
+}
+
+/** 1e18 fixed-point price to a human decimal string, e.g. strike -> "0.30". */
+export function priceToDecimal(price: bigint): string {
+  return formatUnits(price, PRICE_DECIMALS);
+}
+
+/** 1e18 fixed-point price to a USD string with 4 decimals, e.g. "$0.3000". */
+export function formatPrice(price: bigint): string {
+  const value = Number(formatUnits(price, PRICE_DECIMALS));
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+}
+
+/** Human decimal price string to 1e18 fixed point for createMarket strike. */
+export function decimalToPrice(decimal: string): bigint {
+  return parseUnits(decimal.trim() === "" ? "0" : decimal.trim(), PRICE_DECIMALS);
+}
+
+/** YES share of the total pool as a percentage 0-100. Empty pools read 50/50. */
+export function yesPercent(yesPool: bigint, noPool: bigint): number {
+  const total = yesPool + noPool;
+  if (total === 0n) return 50;
+  return Number((yesPool * 10_000n) / total) / 100;
+}
+
+/** True when the string is a positive decimal number suitable for an HBAR or price input. */
+export function isPositiveDecimal(value: string): boolean {
+  return /^\d+(\.\d+)?$/.test(value.trim()) && Number(value) > 0;
+}
