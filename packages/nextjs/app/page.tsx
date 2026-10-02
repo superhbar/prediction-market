@@ -1,162 +1,103 @@
 "use client";
 
-import Image from "next/image";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { HederaPortalFaucet } from "@scaffold-hbar-ui/components";
-import type { NextPage } from "next";
-import { useAccount } from "wagmi";
-import { BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { HederaAddress } from "~~/components/scaffold-hbar";
+import { FILTERS, MarketCard } from "~~/components/markets/MarketCard";
+import { EmptyState, ErrorState, MarketCardSkeleton } from "~~/components/markets/States";
+import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
+import { useMarkets } from "~~/hooks/markets/useMarkets";
 import { useTargetNetwork } from "~~/hooks/scaffold-hbar";
+import { type MarketFilter, deriveStatus, matchesFilter } from "~~/utils/markets/status";
 
-const Home: NextPage = () => {
-  const { address: connectedAddress, status } = useAccount();
+const Home = () => {
   const { targetNetwork } = useTargetNetwork();
+  const { marketIds, markets, count, isLoading, error } = useMarkets();
+  const { config } = useMarketConfig();
+  const [filter, setFilter] = useState<MarketFilter>("all");
 
-  const isReconnecting = status === "reconnecting" || status === "connecting";
-  const isConnected = status === "connected" && connectedAddress;
+  const [nowSec] = useState(() => BigInt(Math.floor(Date.now() / 1000)));
+  const visible = useMemo(
+    () =>
+      marketIds
+        .map((id, index) => ({ id, market: markets[index] ?? null }))
+        .filter(entry => entry.market !== null)
+        .filter(entry => {
+          if (!config || !entry.market) return true;
+          return matchesFilter(deriveStatus(entry.market, nowSec, config), filter);
+        }),
+    [marketIds, markets, config, nowSec, filter],
+  );
 
   return (
-    <>
-      <div className="flex items-center flex-col grow">
-        <div className="hedera-gradient dark:bg-none dark:bg-hedera-charcoal w-full py-16 px-5">
-          <div className="flex flex-col items-center max-w-2xl mx-auto">
-            <Image
-              src="/Hedera-Icon-White.svg"
-              alt="Hedera icon"
-              width={80}
-              height={80}
-              className="mb-6 hidden dark:block"
-            />
-            <Image src="/Hedera-Icon-Dark.svg" alt="Hedera icon" width={80} height={80} className="mb-6 dark:hidden" />
-            <div className="flex flex-col items-center gap-1 mb-4">
-              <span className="block text-lg font-medium tracking-widest uppercase text-white/80 dark:text-white/60">
-                Built on Hedera
-              </span>
-              <span className="block text-lg font-medium tracking-widest uppercase text-white/80 dark:text-white/60">
-                For
-              </span>
-              <Image
-                src="/Hedera-Wordmark-Lockup-White.svg"
-                alt="Hedera"
-                width={240}
-                height={48}
-                className="mt-1 hidden dark:block"
-              />
-              <Image
-                src="/Hedera-Wordmark-Lockup-Dark.svg"
-                alt="Hedera"
-                width={240}
-                height={48}
-                className="mt-1 dark:hidden"
-              />
-            </div>
-          </div>
-        </div>
+    <div className="max-w-[1200px] mx-auto px-6 w-full">
+      <p className="text-[12px] uppercase tracking-[0.2em] mt-10 text-base-content/60 m-0">
+        Price predictions &middot; Chainlink settlement &middot; Hedera
+      </p>
+      <h1 className="font-editorial font-black leading-[1.02] mt-3 text-4xl md:text-6xl max-w-4xl">
+        Markets on what prices do next
+      </h1>
+      <p className="mt-4 text-[15px] leading-relaxed max-w-2xl opacity-80">
+        Stake HBAR on YES or NO. A scheduled transaction settles each market on the first Chainlink price at or after
+        expiry.
+      </p>
 
-        <div className="w-full max-w-4xl mx-auto px-5 -mt-8">
-          <div className="bg-base-100 rounded-2xl shadow-lg p-8">
-            {isReconnecting ? (
-              <div className="flex flex-col items-center gap-2">
-                <p className="font-semibold text-sm text-base-content/60 uppercase tracking-wider m-0">Connecting…</p>
-                <div className="h-8 w-48 rounded bg-base-200 animate-pulse" aria-hidden />
-              </div>
-            ) : isConnected ? (
-              <div className="flex flex-col items-center gap-2">
-                <p className="font-semibold text-sm text-base-content/60 uppercase tracking-wider m-0">
-                  Connected Address
-                </p>
-                <HederaAddress address={connectedAddress} chain={targetNetwork} />
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2">
-                <p className="font-semibold text-sm text-base-content/60 uppercase tracking-wider m-0">
-                  Connect your wallet to get started
-                </p>
-              </div>
+      <div className="flex flex-wrap items-center gap-2 mt-8">
+        {FILTERS.map(entry => (
+          <button
+            key={entry.value}
+            onClick={() => setFilter(entry.value)}
+            className={`btn btn-sm rounded-full ${filter === entry.value ? "btn-primary" : "btn-ghost border border-base-300"}`}
+          >
+            {entry.label}
+          </button>
+        ))}
+        <Link href="/markets/new" className="btn btn-sm rounded-full bg-neutral text-neutral-content ml-auto">
+          Create market
+        </Link>
+      </div>
+
+      <div className="mt-6 pb-16">
+        {isLoading && count === undefined ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <MarketCardSkeleton />
+            <MarketCardSkeleton />
+          </div>
+        ) : error ? (
+          <ErrorState
+            message="Markets could not be loaded. Check your connection and retry."
+            onRetry={() => window.location.reload()}
+          />
+        ) : count === 0 ? (
+          <EmptyState
+            title="No markets yet"
+            body="Be the first to open a market on HBAR, BTC or ETH."
+            actionHref="/markets/new"
+            actionLabel="Create a market"
+          />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            title="Nothing in this filter"
+            body="Try another filter, or create a market."
+            actionHref="/markets/new"
+            actionLabel="Create a market"
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {visible.map(entry =>
+              entry.market ? (
+                <MarketCard
+                  key={entry.id}
+                  marketId={entry.id}
+                  market={entry.market}
+                  status={config ? deriveStatus(entry.market, nowSec, config) : "open"}
+                  chainId={targetNetwork.id}
+                />
+              ) : null,
             )}
           </div>
-        </div>
-
-        <div className="w-full max-w-4xl mx-auto px-5 mt-8 pb-16">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-base-100 rounded-2xl shadow-md p-8 text-center flex flex-col items-center hover:shadow-lg transition-shadow border border-base-300">
-              <div className="w-14 h-14 rounded-full hedera-gradient flex items-center justify-center mb-4">
-                <BugAntIcon className="h-7 w-7 text-white" />
-              </div>
-              <h3 className="font-bold text-lg mb-2">Debug Contracts</h3>
-              <p className="text-base-content/70 text-sm m-0 mb-6">
-                Tinker with your smart contracts and test interactions in real time.
-              </p>
-              <Link href="/debug" passHref className="btn btn-primary btn-sm">
-                Open Debug
-              </Link>
-            </div>
-
-            <div className="bg-base-100 rounded-2xl shadow-md p-8 text-center flex flex-col items-center border border-base-300 relative">
-              <div className="w-14 h-14 rounded-full hedera-gradient flex items-center justify-center mb-4">
-                <MagnifyingGlassIcon className="h-7 w-7 text-white" />
-              </div>
-              <h3 className="font-bold text-lg mb-2">Block Explorer</h3>
-              <p className="text-base-content/70 text-sm m-0 mb-6">
-                Explore transactions, addresses, and contract activity on Hedera.
-              </p>
-              <Link href="/blockexplorer" passHref className="btn btn-primary btn-sm">
-                Open Block Explorer
-              </Link>
-            </div>
-          </div>
-
-          <div className="mt-8 bg-base-100 rounded-2xl shadow-md p-8 border border-base-300">
-            <h3 className="font-bold text-lg mb-4 text-center">Quick Start</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div className="flex items-start gap-3">
-                <span className="font-bold text-primary text-lg leading-none mt-0.5">1</span>
-                <div>
-                  <p className="m-0 font-medium">Edit the frontend</p>
-                  <code className="text-xs bg-base-200 px-2 py-1 rounded">packages/nextjs/app/page.tsx</code>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="font-bold text-primary text-lg leading-none mt-0.5">2</span>
-                <div>
-                  <p className="m-0 font-medium">Edit your contract</p>
-                  <div className="flex flex-col gap-1">
-                    <code className="text-xs bg-base-200 px-2 py-1 rounded">
-                      packages/hardhat/contracts/HederaToken.sol
-                    </code>
-                    <code className="text-xs bg-base-200 px-2 py-1 rounded">
-                      packages/foundry/contracts/HederaToken.sol
-                    </code>
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="font-bold text-primary text-lg leading-none mt-0.5">3</span>
-                <div>
-                  <p className="m-0 font-medium">Get testnet HBAR</p>
-                  <HederaPortalFaucet variant="link" label="portal.hedera.com/faucet" showIcon={false} />
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <span className="font-bold text-primary text-lg leading-none mt-0.5">4</span>
-                <div>
-                  <p className="m-0 font-medium">Deploy to Hedera</p>
-                  <div className="flex flex-col gap-1">
-                    <code className="text-xs bg-base-200 px-2 py-1 rounded">
-                      yarn hardhat:deploy --network hederaTestnet
-                    </code>
-                    <code className="text-xs bg-base-200 px-2 py-1 rounded">
-                      yarn foundry:deploy --network hedera_testnet
-                    </code>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
-    </>
+    </div>
   );
 };
 
