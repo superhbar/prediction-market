@@ -1,9 +1,13 @@
+import scaffoldConfig from "../../scaffold.config";
+import { mirrorBaseForChain } from "../markets/hashscan";
+
 export const HBAR_PRICE_CACHE_DURATION_MS = 60 * 1000;
 /**
- * The network's own HBAR/USD rate, published by the mainnet mirror node and used by Hedera to price
- * fees. It needs no API key, sends CORS headers and is not rate limited like third-party price APIs.
+ * The network's own HBAR/USD rate, published by the mirror node of the app's target network and used
+ * by Hedera to price fees. It needs no API key, sends CORS headers and is not rate limited like
+ * third-party price APIs. Using the target network's mirror keeps the whole app on one mirror host.
  */
-export const HBAR_PRICE_URL = "https://mainnet.mirrornode.hedera.com/api/v1/network/exchangerate";
+export const HBAR_PRICE_URL = `${mirrorBaseForChain(scaffoldConfig.targetNetworks[0].id)}/api/v1/network/exchangerate`;
 
 type HbarPriceCache = {
   price: number;
