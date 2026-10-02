@@ -18,14 +18,14 @@ export const SwitchTheme = ({ className }: { className?: string }) => {
     () => false,
   );
 
-  const isDarkMode = resolvedTheme === "dark";
+  const isDarkMode = resolvedTheme === "editorial-dark";
 
   const handleToggle = () => {
     if (isDarkMode) {
-      setTheme("light");
+      setTheme("editorial");
       return;
     }
-    setTheme("dark");
+    setTheme("editorial-dark");
   };
 
   if (!mounted) return null;

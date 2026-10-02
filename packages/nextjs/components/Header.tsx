@@ -1,33 +1,33 @@
 "use client";
 
 import React, { useRef } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bars3Icon, BugAntIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { Bars3Icon } from "@heroicons/react/24/outline";
 import { RainbowKitCustomConnectButton } from "~~/components/scaffold-hbar";
 import { useOutsideClick } from "~~/hooks/scaffold-hbar";
 
 type HeaderMenuLink = {
   label: string;
   href: string;
-  icon?: React.ReactNode;
 };
 
 export const menuLinks: HeaderMenuLink[] = [
   {
-    label: "Home",
+    label: "Markets",
     href: "/",
   },
   {
-    label: "Debug Contracts",
-    href: "/debug",
-    icon: <BugAntIcon className="h-4 w-4" />,
+    label: "Create",
+    href: "/markets/new",
   },
   {
-    label: "Block Explorer",
-    href: "/blockexplorer",
-    icon: <MagnifyingGlassIcon className="h-4 w-4" />,
+    label: "Portfolio",
+    href: "/portfolio",
+  },
+  {
+    label: "Debug",
+    href: "/debug",
   },
 ];
 
@@ -36,18 +36,17 @@ export const HeaderMenuLinks = () => {
 
   return (
     <>
-      {menuLinks.map(({ label, href, icon }) => {
-        const isActive = pathname === href;
+      {menuLinks.map(({ label, href }) => {
+        const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
         return (
           <li key={href}>
             <Link
               href={href}
               passHref
               className={`${
-                isActive ? "bg-primary/10 text-primary font-semibold" : "hover:bg-primary/5"
-              } py-1.5 px-3 text-sm rounded-full gap-2 grid grid-flow-col transition-colors`}
+                isActive ? "font-semibold underline underline-offset-4" : "opacity-70 hover:opacity-100"
+              } py-1.5 px-3 text-sm gap-2 grid grid-flow-col transition-opacity`}
             >
-              {icon}
               <span>{label}</span>
             </Link>
           </li>
@@ -67,7 +66,7 @@ export const Header = () => {
   });
 
   return (
-    <div className="sticky lg:static top-0 navbar bg-base-100 min-h-0 shrink-0 justify-between z-20 shadow-sm border-b border-base-300 px-0 sm:px-2">
+    <div className="sticky lg:static top-0 navbar bg-base-200 min-h-0 shrink-0 justify-between z-20 border-b border-base-300 px-0 sm:px-2">
       <div className="navbar-start w-auto lg:w-1/2">
         <details className="dropdown" ref={burgerMenuRef}>
           <summary className="ml-1 btn btn-ghost lg:hidden hover:bg-transparent">
@@ -82,19 +81,16 @@ export const Header = () => {
             <HeaderMenuLinks />
           </ul>
         </details>
-        <Link href="/" passHref className="hidden lg:flex items-center gap-3 ml-4 mr-6 shrink-0">
-          <div className="flex relative w-9 h-9">
-            <Image alt="Hedera icon" className="cursor-pointer dark:hidden" fill src="/Hedera-Icon-Dark.svg" />
-            <Image alt="Hedera icon" className="cursor-pointer hidden dark:block" fill src="/Hedera-Icon-White.svg" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-bold leading-tight text-base">Scaffold-HBAR</span>
-            <span className="text-[10px] tracking-wider uppercase text-base-content/50 font-medium">
-              Built on Hedera
-            </span>
-          </div>
+        <Link href="/" passHref className="hidden lg:flex items-baseline gap-2 ml-4 mr-6 shrink-0">
+          <span className="font-editorial font-black text-xl tracking-tight">prediction-market</span>
+          <span className="text-[11px] uppercase tracking-[0.18em] border border-base-300 rounded-full px-2 py-0.5 text-base-content/60">
+            on Hedera
+          </span>
         </Link>
-        <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2">
+        <Link href="/" passHref className="flex lg:hidden items-baseline gap-2 ml-1 mr-4 shrink-0">
+          <span className="font-editorial font-black text-lg tracking-tight">prediction-market</span>
+        </Link>
+        <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2 ml-4">
           <HeaderMenuLinks />
         </ul>
       </div>

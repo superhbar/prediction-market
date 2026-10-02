@@ -1,22 +1,12 @@
-@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap");
-/* Styrene A Web – Hedera brand font (fallback: Montserrat per brand.hedera.com) */
-@font-face {
-  font-family: "Styrene A Web";
-  src:
-    url("https://db.onlinewebfonts.com/t/819f612977ba7ba86c14b739b908c73f.woff2") format("woff2"),
-    url("https://db.onlinewebfonts.com/t/819f612977ba7ba86c14b739b908c73f.woff") format("woff");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
 @import "tailwindcss";
 
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+@custom-variant dark (&:where([data-theme=editorial-dark], [data-theme=editorial-dark] *));
 
 @theme {
   --shadow-center: 0 0 12px -2px rgb(0 0 0 / 0.05);
   --animate-pulse-fast: pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  --font-sans: "Styrene A Web", "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces", Georgia, serif;
   --color-hedera-ultraviolet: #8259ef;
   --color-hedera-azure: #0031ff;
   --color-hedera-charcoal: #11151d;
@@ -24,61 +14,64 @@
   --color-hedera-cobalt: #2d84eb;
   --color-hedera-violet: #4f46e5;
   --color-hedera-smoke: #9b9b9d;
+  --color-cream: #f6f1e7;
+  --color-paper: #fffdf7;
+  --color-ink: #1b1a17;
+  --color-hairline: #e2d9c6;
+  --color-muted-ink: #8a7f66;
 }
 
 @plugin "daisyui" {
-  themes:
-    light,
-    dark --prefersdark;
+  themes: editorial, editorial-dark;
 }
 
 @plugin "daisyui/theme" {
-  name: "light";
+  name: "editorial";
 
-  --color-primary: #4f46e5;
+  --color-primary: #8259ef;
   --color-primary-content: #ffffff;
-  --color-secondary: #8259ef;
-  --color-secondary-content: #ffffff;
-  --color-accent: #2d84eb;
+  --color-secondary: #1b1a17;
+  --color-secondary-content: #f6f1e7;
+  --color-accent: #8259ef;
   --color-accent-content: #ffffff;
-  --color-neutral: #11151d;
-  --color-neutral-content: #ffffff;
-  --color-base-100: #ffffff;
-  --color-base-200: #f7f7f8;
-  --color-base-300: #e8e8ec;
-  --color-base-content: #11151d;
+  --color-neutral: #1b1a17;
+  --color-neutral-content: #f6f1e7;
+  --color-base-100: #fffdf7;
+  --color-base-200: #f6f1e7;
+  --color-base-300: #e2d9c6;
+  --color-base-content: #1b1a17;
   --color-info: #2d84eb;
-  --color-success: #34eeb6;
-  --color-warning: #ffcf72;
-  --color-error: #ff8863;
+  --color-success: #1a7f4b;
+  --color-warning: #b7791f;
+  --color-error: #c2410c;
 
   --radius-field: 9999rem;
-  --radius-box: 1rem;
+  --radius-box: 0.25rem;
   --tt-tailw: 6px;
 }
 
 @plugin "daisyui/theme" {
-  name: "dark";
+  name: "editorial-dark";
 
-  --color-primary: #8259ef;
-  --color-primary-content: #ffffff;
-  --color-secondary: #4f46e5;
-  --color-secondary-content: #ffffff;
-  --color-accent: #2d84eb;
-  --color-accent-content: #ffffff;
-  --color-neutral: #ffffff;
-  --color-neutral-content: #11151d;
-  --color-base-100: #181c27;
-  --color-base-200: #11151d;
-  --color-base-300: #0a0d14;
-  --color-base-content: #f0f0f2;
+  --color-primary: #a98aff;
+  --color-primary-content: #16130e;
+  --color-secondary: #ece5d3;
+  --color-secondary-content: #16130e;
+  --color-accent: #a98aff;
+  --color-accent-content: #16130e;
+  --color-neutral: #ece5d3;
+  --color-neutral-content: #16130e;
+  --color-base-100: #1e1a12;
+  --color-base-200: #16130e;
+  --color-base-300: #3a3222;
+  --color-base-content: #ece5d3;
   --color-info: #2d84eb;
   --color-success: #34eeb6;
   --color-warning: #ffcf72;
   --color-error: #ff8863;
 
   --radius-field: 9999rem;
-  --radius-box: 1rem;
+  --radius-box: 0.25rem;
 
   --tt-tailw: 6px;
   --tt-bg: var(--color-primary);
@@ -107,7 +100,7 @@
 
   body {
     min-height: 100vh;
-    font-family: "Styrene A Web", "Montserrat", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   }
 
   h1,
@@ -124,6 +117,15 @@
   background: var(--color-base-200);
 }
 
+.font-editorial {
+  font-family: "Fraunces", Georgia, serif;
+}
+
+.editorial-rule {
+  height: 1px;
+  background: var(--color-base-300);
+}
+
 .btn {
   @apply shadow-md;
 }
@@ -138,15 +140,4 @@
 
 .link:hover {
   opacity: 80%;
-}
-
-.hedera-gradient {
-  background: linear-gradient(135deg, #8259ef 0%, #0031ff 100%);
-}
-
-.hedera-gradient-text {
-  background: linear-gradient(135deg, #8259ef 0%, #0031ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
