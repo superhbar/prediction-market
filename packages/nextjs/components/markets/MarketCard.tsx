@@ -31,7 +31,7 @@ export function MarketCard({ marketId, market, status, chainId }: MarketCardProp
         </Link>
       </h2>
       <div className="flex-1" />
-      <div className="flex-1 h-[3px] flex overflow-hidden rounded-full bg-base-300" aria-hidden>
+      <div className="w-full h-[3px] flex overflow-hidden rounded-full bg-base-300" aria-hidden>
         <div className="bg-primary" style={{ width: `${yes}%` }} />
       </div>
       <div className="flex items-center justify-between text-sm">

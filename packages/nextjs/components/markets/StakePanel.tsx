@@ -5,12 +5,19 @@ import type { Address } from "viem";
 import { useAccount, useWriteContract } from "wagmi";
 import { associateAbi } from "~~/hooks/markets/abis";
 import { useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-hbar";
-import { useScaffoldReadContract } from "~~/hooks/scaffold-hbar";
 import { longZeroToEntityId, mirrorBaseForChain } from "~~/utils/markets/hashscan";
 import { fetchAccount, fetchIsTokenAssociated } from "~~/utils/markets/mirror";
 import { isRefund } from "~~/utils/markets/status";
 import { type Market, MarketState } from "~~/utils/markets/types";
-import { GAS, formatHbar, hbarToTinybar, hbarToWeibar, isPositiveDecimal, yesPercent } from "~~/utils/markets/units";
+import {
+  GAS,
+  formatHbar,
+  hbarToTinybar,
+  hbarToWeibar,
+  isPositiveDecimal,
+  projectedPayout,
+  yesPercent,
+} from "~~/utils/markets/units";
 import { notification } from "~~/utils/scaffold-hbar";
 
 type StakePanelProps = {
@@ -20,7 +27,7 @@ type StakePanelProps = {
 
 type Association = "checking" | "ok" | "needs-association" | "unknown";
 
-/** Stake YES/NO with quote preview, association check and explicit gas. */
+/** Stake YES/NO with a projected payout, association check and explicit gas. */
 export function StakePanel({ marketId, market }: StakePanelProps) {
   const { address: account } = useAccount();
   const { targetNetwork } = useTargetNetwork();
@@ -37,12 +44,6 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
   const [assocSnapshot, setAssocSnapshot] = useState<{ key: string; value: Association }>({
     key: "",
     value: "unknown",
-  });
-
-  const { data: quote } = useScaffoldReadContract({
-    contractName: "PredictionMarkets",
-    functionName: "quotePayout",
-    args: [BigInt(marketId), yes, amountTinybar ?? undefined],
   });
 
   const { writeContractAsync, isMining: isStaking } = useScaffoldWriteContract({
@@ -182,8 +183,18 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
           <dd className="font-semibold">{amountValid ? `${amount} ${side} tokens` : "-"}</dd>
         </div>
         <div className="flex justify-between">
-          <dt className="opacity-70">Redeem value now</dt>
-          <dd className="font-semibold">{quote !== undefined ? formatHbar(quote as bigint) : "-"}</dd>
+          <dt className="opacity-70">Pays if {side} wins</dt>
+          <dd className="font-semibold">
+            {amountTinybar !== undefined
+              ? formatHbar(
+                  projectedPayout(
+                    amountTinybar,
+                    yes ? market.yesPool : market.noPool,
+                    yes ? market.noPool : market.yesPool,
+                  ),
+                )
+              : "-"}
+          </dd>
         </div>
       </dl>
 
@@ -205,7 +216,8 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
         {isStaking ? "Staking…" : `Stake ${amountValid ? amount : "-"} HBAR on ${side}`}
       </button>
       <p className="text-[13px] mt-3 opacity-70 font-editorial italic">
-        First stake on a token triggers a one-time auto-association fee.
+        The payout assumes no further stakes; later stakes move it. Your first stake on a token also pays a one-time
+        auto-association fee.
       </p>
     </div>
   );

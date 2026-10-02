@@ -71,10 +71,24 @@ export function suggestStrike(price: bigint): string {
   return priceToDecimal(((price + step / 2n) / step) * step);
 }
 
-/** 1e18 fixed-point price to a USD string with 4 decimals, e.g. "$0.3000". */
+/**
+ * 1e18 fixed-point price to a USD string: 4 decimals under $1, 2 under $10,000, whole dollars above,
+ * e.g. "$0.3000", "$2,657.85", "$90,000".
+ */
 export function formatPrice(price: bigint): string {
   const value = Number(formatUnits(price, PRICE_DECIMALS));
-  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+  const abs = Math.abs(value);
+  const digits = abs < 1 ? 4 : abs < 10_000 ? 2 : 0;
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+/**
+ * What a new stake would pay if its side wins and nobody else stakes: the whole pool, including this
+ * stake, shared pro rata over the winning side. All amounts are tinybar.
+ */
+export function projectedPayout(stake: bigint, sidePool: bigint, otherPool: bigint): bigint {
+  if (stake <= 0n) return 0n;
+  return (stake * (sidePool + otherPool + stake)) / (sidePool + stake);
 }
 
 /** Human decimal price string to 1e18 fixed point for createMarket strike. */

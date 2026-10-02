@@ -6,6 +6,7 @@ import {
   hbarToWeibar,
   isPositiveDecimal,
   priceToDecimal,
+  projectedPayout,
   suggestStrike,
   tinybarToHbar,
   tinybarToWeibar,
@@ -49,8 +50,18 @@ describe("price conversions", () => {
     expect(suggestStrike(3456789000000000000n)).toBe("3.46");
   });
 
-  it("formats USD prices with 4 decimals", () => {
+  it("formats USD prices with precision that fits the price", () => {
     expect(formatPrice(300000000000000000n)).toBe("$0.3000");
+    expect(formatPrice(2657850000000000000000n)).toBe("$2,657.85");
+    expect(formatPrice(90000000000000000000000n)).toBe("$90,000");
+  });
+
+  it("projects a stake's payout from the current pools", () => {
+    // 10 HBAR on YES into 12 YES / 8 NO: pool becomes 30, YES side 22, so 10 * 30 / 22.
+    expect(projectedPayout(1000000000n, 1200000000n, 800000000n)).toBe(1363636363n);
+    // First stake on an empty market gets its own stake back.
+    expect(projectedPayout(500000000n, 0n, 0n)).toBe(500000000n);
+    expect(projectedPayout(0n, 1n, 1n)).toBe(0n);
   });
 });
 
