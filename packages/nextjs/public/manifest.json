@@ -1,5 +1,5 @@
 {
-  "name": "Scaffold-HBAR 2 DApp",
-  "description": "A DApp built with Scaffold-HBAR",
-  "iconPath": "logo.svg"
+  "name": "Prediction Market on Hedera",
+  "description": "Oracle-settled prediction markets on Hedera",
+  "iconPath": "icon.svg"
 }
