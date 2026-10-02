@@ -13,6 +13,7 @@ Run on Hedera testnet (chain 296) through `https://testnet.hashio.io/api` on 202
 | Maximum schedule horizon | `hasScheduleCapacity` is true at +62 days and false at +63 days | `capacity()` probe |
 | Gas for `scheduleCall` in a normal transaction | About 1.46M gas. A 600k limit fails with `INSUFFICIENT_GAS` inside `0x16b` | tx `0xec13f9…` (fail), `0xb595d5…` (ok) |
 | Scheduled call runs on time | Yes. It executes as a `CONTRACTCALL` with `scheduled=true`, and the contract pays a 0.022 HBAR fee | mirror node transactions for the spike contract |
+| A scheduled call books the next one (self-rescheduling) | Works when the scheduled call has a 2.5M gas limit. The booking from inside the scheduled call cost the contract 1.17 HBAR, and the next hop ran on time for 0.022 HBAR. A 1.2M limit is too low to book. | `hop(2, 30, 2500000)`, hops went 3 to 5 |
 | Token creation from a contract (contract is treasury, supply key and wipe key) | 190k gas plus an 11.45 HBAR fee. Testnet rate: $1 = 9.61 HBAR | `createToken` |
 | Cost of mint and transfer | Mint 44k gas, transfer 43k gas. The first transfer to a new holder costs about 750k gas because of auto-association | `mintOnly`, `transferTo` |
 | Redeem without an approval step | Works. `wipeTokenAccount` called by the contract (as wipe key) removed 40 of a holder's 100 tokens, and total supply dropped to 60 | `wipeFrom` |
@@ -22,6 +23,7 @@ Run on Hedera testnet (chain 296) through `https://testnet.hashio.io/api` on 202
 
 - A market costs the creator about 23 HBAR in token fees, plus gas for one schedule booking. Developers need a Hedera Portal account (1000 HBAR a day), not the 10 HBAR a day faucet.
 - The frontend must set an explicit gas limit for the first stake on each token, because of the auto-association cost.
+- Self-healing retries are feasible. Each retry costs the market reserve about 1.17 HBAR, so the reserve is roughly `maxRetries x 1.2 HBAR` plus a small buffer.
 - Settle on the first oracle round at or after expiry, not the latest round. The feed can be up to 46 minutes stale.
 
 ## Run it
