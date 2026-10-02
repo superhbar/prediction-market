@@ -9,6 +9,14 @@ description: >
 
 agent: claude
 
+# Local run only: the nested Claude CLI is not logged in on this machine, so the generator is
+# OpenCode through a shim and the Tier 3 semantic validator is graded by hand afterwards.
+generator:
+  provider: command
+  command: /private/tmp/claude-501/-Users-beyond-Desktop-projects-hedera-scaffold/8ac14ac9-feff-482f-b6e1-b7320361262d/scratchpad/harness-opencode.sh
+  args: ["{prompt}"]
+  timeoutMs: 3500000
+
 prd: .harness/prds/01-market-activity.md
 
 baseline:
@@ -29,7 +37,7 @@ validators:
 
 contract: .harness/acceptance-contract.json
 validator:
-  enabled: true
+  enabled: false
 
 # Tier 3.5: the harness funds an ephemeral ECDSA testnet account from your
 # operator and injects it as the burner wallet. The frontend already points at
