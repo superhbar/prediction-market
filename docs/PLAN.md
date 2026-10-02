@@ -79,6 +79,13 @@ where compatible (wagmi stays 2.x because of RainbowKit). PWA = manifest only, n
 - Sun: docs, harness, gate matrix (npm + yarn), testnet tx, owner rename.
 - **Submit by Mon 03:44 NPT** (Sun 18:00 ET), 6h buffer.
 
-## Verification
+## Verification (gate rehearsal, run before submit and in CI)
 
-TBD
+1. Fresh scaffold, npm: `CREATE_SCAFFOLD_HBAR_TEMPLATE_DIR=<repo> npm create scaffold-hbar@latest t-npm`, choose npm and foundry. Then `npm run lint`, `npm run next:build`, `npm run foundry:test`, and `npm run next:check-types`.
+2. Fresh scaffold, yarn: the same with yarn.
+3. Fresh scaffold from GitHub: `npm create scaffold-hbar@latest -- --template superhbar/<repo>`.
+4. Boot `next start` and curl every core route: `/`, `/markets/new`, `/markets/<id>`, `/portfolio`. Each must return 200 with no wallet connected and no Pyth key set.
+5. Testnet end-to-end script: create, stake YES and NO, scheduled settle, redeem. Record the Hashscan links in the README.
+6. Secret scan of the full git history (`git log -p | grep` for 64-hex keys and `PRIVATE_KEY=`), and confirm no `.env` is tracked.
+7. Check that LICENSE is MIT, `template.json` is valid, and README.md, AGENTS.md and `.harness/` are present.
+8. Harness: `npx hedera-harness doctor`, then `npx hedera-harness validate`.
