@@ -49,6 +49,8 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 
 ## Hedera gotchas
 
+Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure before changing a gas limit or a fee constant.
+
 - `forge script --broadcast` cannot reach Hashio (EIP-1898 `eth_getTransactionCount`). Deploy and e2e use `cast send`. Keep it that way.
 - `msg.value` in the EVM is tinybar (8 decimals); wallets send weibar (18 decimals); the relay converts. Contract amounts, pools, reserves, and token balances are tinybar; strike and settlement prices are 1e18 fixed point.
 - First stake per token per account costs ~0.65 HBAR (auto-association); later stakes ~0.04 HBAR. The UI must keep the association prompt.

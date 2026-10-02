@@ -83,6 +83,8 @@ Copy each `.env.example` to `.env` and fill in the values you need. `PYTH_API_KE
 
 ## How it works
 
+Every number below was measured on Hedera testnet. The full list, with what each measurement means for the code, is in [docs/hedera-notes.md](docs/hedera-notes.md).
+
 ```mermaid
 sequenceDiagram
     participant Creator
@@ -182,6 +184,8 @@ packages/nextjs/
   utils/markets/mirror.ts           Mirror node REST reads (exchange rate, account, token association, schedule status)
   utils/markets/hashscan.ts         Hashscan and entity id link builders
 .harness/                           Harness recipe: spec, PRDs, validators (see Using Hedera Harness)
+docs/hedera-notes.md                Hedera behaviour measured on testnet (units, HTS, HIP-1215, oracles, tooling)
+docs/screenshots/                   Screenshots of the production build against the testnet deployment
 ```
 
 ## Testing

@@ -28,11 +28,6 @@ dist
 .env.*
 !.env.example
 
-# foundry
-spike/lib/
-spike/out/
-spike/cache/
-spike/broadcast/
 
 # os / tooling
 .DS_Store
