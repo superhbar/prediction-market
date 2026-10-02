@@ -1,138 +1,84 @@
-# Agent instructions
+# AGENTS.md: prediction-market
 
-Briefing for coding agents in this app (Cursor, Claude Code, Codex). Claude Code loads it through `CLAUDE.md`.
-
-This is a Scaffold-HBAR dApp: Next.js App Router, wallet connect, Debug Contracts, and Hedera networks (testnet, mainnet, local fork). The CLI may have left only Hardhat or only Foundry.
-
-Use the package manager this project was created with (`packageManager` in the root `package.json`, or the lockfile). Examples use `yarn`; if the app was created with npm, swap `yarn <script>` for `npm run <script>`.
-
-## Which Solidity package
-
-- `packages/hardhat` exists → Hardhat (`hardhat-deploy`)
-- `packages/foundry` exists → Foundry (Forge scripts)
-- `packages/nextjs` is always the frontend (App Router, RainbowKit, Wagmi, Viem, DaisyUI)
-
-Follow only the flavor that is present.
+Scaffold-hbar template: oracle-settled binary prediction markets on Hedera. Foundry only, Next.js App Router, RainbowKit/wagmi/viem, DaisyUI. Live testnet deployment at `0x5863781b36e7beee162152a7d8ab32fe471e105b`; frontend bindings ship pointing at it.
 
 ## Commands
 
-Package-prefixed scripts for package-specific work. Keep only truly cross-workspace commands unprefixed.
-
 ```bash
-# Local chain + deploy + frontend (separate terminals)
-yarn hardhat:chain    # Hedera-forked Hardhat node on 8545
-yarn hardhat:deploy --network localhost
-yarn foundry:chain    # Anvil from the Foundry package
-yarn foundry:deploy
-yarn next:start       # http://localhost:3000
-
-# Frontend only
-yarn next:dev
-
-# Quality / build
-yarn lint
-yarn format
-yarn next:build
-yarn hardhat:compile
-yarn foundry:compile
-
-# Live networks
-yarn hardhat:deploy --network hederaTestnet   # or hederaMainnet
-yarn foundry:deploy --network hedera_testnet  # or hedera_mainnet
-yarn hardhat:verify -- HederaToken testnet [0xAddress]
-yarn foundry:verify:testnet
-
-# Deployer account
-yarn hardhat:account:generate
-yarn hardhat:account:import
-yarn hardhat:account
+yarn install
+yarn next:start            # dev server on http://localhost:3000 (also yarn next:dev)
+yarn foundry:account:generate
+yarn foundry:account:import
+yarn foundry:deploy --network hedera_testnet --keystore <name>
+DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet   # full lifecycle on testnet, ~17 min
+yarn foundry:test          # 78 forge unit tests, HTS/HSS mocked
+yarn next:test             # vitest: units, feeds, status, hashscan
+yarn next:lint && yarn next:check-types && yarn next:build
+yarn lint                  # next:lint + foundry:lint
 ```
 
-`yarn hardhat:deploy` without `--network localhost` targets the in-process `hardhat` network, not the long-running fork.
+npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/foundry`, the same entry points are unprefixed (`yarn deploy`, `yarn test`, `yarn e2e:testnet`).
 
-## Layout
+## Architecture and key paths
 
-### Hardhat
+- `packages/foundry/contracts/PredictionMarkets.sol`: the whole protocol. One contract, all markets, no owner.
+- `packages/foundry/contracts/libraries/PriceMath.sol`: Chainlink/Pyth normalization to 1e18. Only payout math helper.
+- `packages/foundry/contracts/interfaces/`: `IAggregatorV3`, `IPyth`, `IHederaScheduleService`, `IHtsWipe`.
+- `packages/foundry/script/HelperConfig.s.sol`: feeds (HBAR/BTC/ETH, testnet + mainnet) and timing config. Single source of truth.
+- `packages/foundry/script/Deploy.s.sol`: localhost deploy. Hedera deploys go through `scripts-js/deployHedera.js`.
+- `packages/foundry/scripts-js/deployHedera.js`: `cast send --create` deploy, writes `broadcast/` + `deployments/`, then regenerates bindings.
+- `packages/foundry/scripts-js/e2eTestnet.js`: create, stake both sides, wait for scheduled settle, redeem, withdraw reserve.
+- `packages/foundry/test/`: `PredictionMarkets.t.sol`, `PriceMath.t.sol`, `HelperConfig.t.sol`, `mocks/` (etched at `0x167`/`0x16b`).
+- `packages/nextjs/app/`: `page.tsx` (list), `markets/new`, `markets/[id]`, `portfolio`, `api/pyth/route.ts` (server-only Hermes proxy).
+- `packages/nextjs/components/markets/`: MarketCard, StakePanel, RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, States.
+- `packages/nextjs/hooks/markets/`: useMarket(s), usePositions, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate.
+- `packages/nextjs/utils/markets/`: `units.ts` (unit boundary + gas limits), `feeds.ts`, `status.ts`, `mirror.ts`, `hashscan.ts`, `types.ts`.
+- `packages/nextjs/contracts/deployedContracts.ts`: generated. Never edit by hand.
 
-- Contracts: `packages/hardhat/contracts/`
-- Deploy scripts: `packages/hardhat/deploy/`
-- Tests: `packages/hardhat/test/`
-- Config: `packages/hardhat/hardhat.config.ts`
-- Tagged deploy: if `deployHederaToken.tags = ["HederaToken"]`, run `yarn hardhat:deploy --tags HederaToken`
+## Invariants that must hold
 
-### Foundry
+- State machine is `Open -> Settled | Voided`. No other transitions. `redeem` and `withdrawReserve` require Settled or Voided.
+- Settlement price is the FIRST oracle price at or after expiry, on both paths. Never latest-at-expiry, never caller-chosen.
+- Retries only when `msg.sender == address(this)` (scheduled call), `retriesLeft > 0`, reserve covers `retryCostEstimate`. External callers get `NoEligibleRound`, never a retry.
+- `maxRoundLag` (2h) bounds settlement rounds; `gracePeriod` (24h) gates `voidMarket`; `settleWithPyth` uses `minPublishTime = expiry`.
+- Payouts come from recorded pools only: `payout = amount * (yesPool + noPool) / winningPool`; Invalid outcome refunds 1:1; losers get 0. Total winner payouts never exceed the pool (fuzz-tested).
+- `totalPoolLiability` (owed to traders) and `totalReserves` (sum of market reserves) are updated on every stake, redeem, reserve charge, and withdrawal. `withdrawReserve` pays at most balance surplus beyond both; underestimates land on the creator.
+- Tinybar inside the contract, always. No rescaling in Solidity; conversion lives only in `utils/markets/units.ts`.
+- Frontend uses explicit gas limits from `units.ts` GAS (createMarket 3M, stake 1.5M, settle/settleWithPyth 1M, redeem 800k, void/withdraw 300k). Do not rely on estimation.
+- Frontend shows `quotePayout` as-is. Never reimplement payout math in TS.
 
-- Contracts: `packages/foundry/contracts/`
-- Deploy scripts: `packages/foundry/script/` (`Deploy.s.sol`, `DeployHederaToken.s.sol`, `DeployHtsTokenCreator.s.sol`)
-- Tests: `packages/foundry/test/`
-- Config: `packages/foundry/foundry.toml`
-- One contract: `yarn foundry:deploy --file DeployHederaToken.s.sol`
+## Hedera gotchas
 
-### After deploy
+- `forge script --broadcast` cannot reach Hashio (EIP-1898 `eth_getTransactionCount`). Deploy and e2e use `cast send`. Keep it that way.
+- `msg.value` in the EVM is tinybar (8 decimals); wallets send weibar (18 decimals); the relay converts. Contract amounts, pools, reserves, and token balances are tinybar; strike and settlement prices are 1e18 fixed point.
+- First stake per token per account costs ~0.65 HBAR (auto-association); later stakes ~0.04 HBAR. The UI must keep the association prompt.
+- Market creation costs two HTS creations (~$1 each, ~23 HBAR at $1 = 9.61 HBAR) plus a 7 HBAR minimum reserve. Point users at the Portal faucet (1000 HBAR/day).
+- Scheduled `settle` runs with 2.5M gas (constant `SETTLE_GAS`); 1.2M cannot book a nested retry. Each retry costs the reserve ~1.17 HBAR (charged 1.5 HBAR); each execution ~0.104 HBAR (charged 0.5 HBAR).
+- `hedera-forking` does not emulate HSS: keep the `vm.etch` mocks for unit tests and prove scheduling on real testnet via e2e.
+- HTS `burnToken` only burns from treasury, so redeem uses `wipeTokenAccount` (wipe key). No approve step exists by design.
+- Never cross a Chainlink phase boundary when walking rounds (top 16 bits of round id); walk is bounded to 48 steps.
+- Hermes needs an API key since 2026-08-26. `PYTH_API_KEY` stays server-only in `app/api/pyth/route.ts`. The app must run fully without it.
 
-ABIs and addresses are written to `packages/nextjs/contracts/deployedContracts.ts`. Put third-party contracts in `packages/nextjs/contracts/externalContracts.ts`.
+## Safe extension points
 
-Sample contracts on this starter: `HederaToken` (ERC-20) and `HtsTokenCreator` (HTS precompile at `0x167`).
+- Feeds: `HelperConfig.s.sol` (`buildFeedKeys`, `buildFeeds`) + `FEED_KEYS` in `utils/markets/feeds.ts`. Feeds are immutable per deployment.
+- Payout: `quotePayout` is the single definition; extend the fuzz tests with any model change.
+- Fees: skim in `stake` into reserve or a recorded balance; keep `totalPoolLiability` trader-only; update `useCreationEstimate.ts`.
+- UI: `components/markets/` and `hooks/markets/`; status derivation in `utils/markets/status.ts`.
 
-## Frontend contract interaction
+## How to verify a change
 
-Hooks live in `packages/nextjs/hooks/scaffold-hbar`. Use the names that exist in the codebase:
+1. `yarn foundry:test` (expect 78 passing, 100 percent line coverage).
+2. `yarn next:lint`, `yarn next:check-types`, `yarn next:test`, `yarn next:build`.
+3. Touching settlement, scheduling, units, or reserve accounting: run `DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet` on testnet.
+4. Touching `.harness/` behavior: `npx hedera-harness validate`.
 
-- `useScaffoldReadContract` — not `useScaffoldContractRead`
-- `useScaffoldWriteContract` — not `useScaffoldContractWrite`
+## What not to do
 
-Also: `useScaffoldWatchContractEvent`, `useScaffoldEventHistory`, `useDeployedContractInfo`, `useScaffoldContract`, `useTransactor`.
-
-```typescript
-const { data: balance } = useScaffoldReadContract({
-  contractName: "HederaToken",
-  functionName: "balanceOf",
-  args: [connectedAddress],
-});
-
-const { writeContractAsync, isPending } = useScaffoldWriteContract({
-  contractName: "HederaToken",
-});
-
-await writeContractAsync({
-  functionName: "mint",
-  args: [connectedAddress, parseEther("1")],
-});
-```
-
-`HederaToken.mint` is `onlyOwner`. For HTS creation, `HtsTokenCreator.createToken` is payable (HTS fee via `msg.value`) and emits `TokenCreated`.
-
-### UI
-
-Use `@scaffold-hbar-ui/components` for web3 UI: `Address`, `AddressInput`, `Balance`, `EtherInput`, `IntegerInput`.
-
-Use DaisyUI classes, not raw Tailwind when a DaisyUI component exists:
-
-```tsx
-<button className="btn btn-primary">Connect</button>
-```
-
-### Networks
-
-- Hardhat: `packages/hardhat/hardhat.config.ts` (`hederaTestnet` 296, `hederaMainnet` 295)
-- Foundry: `packages/foundry/foundry.toml` (`hedera_testnet`, `hedera_mainnet`)
-- Next.js: `packages/nextjs/scaffold.config.ts` (target networks, polling, RPC overrides, WalletConnect)
-
-## Style
-
-| Style | Use |
-| --- | --- |
-| `UpperCamelCase` | types, components |
-| `lowerCamelCase` | variables, functions |
-| `CONSTANT_CASE` | constants |
-| `snake_case` | Hardhat deploy files and Foundry scripts |
-
-Next.js imports use the `~~` alias:
-
-```tsx
-import { useTargetNetwork } from "~~/hooks/scaffold-hbar";
-```
-
-App Router pages live under `packages/nextjs/app/`. Add `"use client"` when the page uses hooks.
-
-Prefer `type` over `interface`. No `T` prefix on types. Let TypeScript infer when it can. Comments should add information.
+- No owner, no admin, no pauser. Do not add privileged roles.
+- No `delegatecall` to `0x16b`. Scheduled calls are direct CALLs from the contract.
+- No `forge script --broadcast` to Hashio. Use the `cast send` path in `scripts-js/`.
+- No Pyth key (or any secret) in client code or `NEXT_PUBLIC_` vars.
+- No hand edits to `deployedContracts.ts`. Regenerate via deploy.
+- No frontend payout math. Read `quotePayout`.
+- No mainnet deploy without an audit. Mainnet addresses in `HelperConfig` are reference only.
