@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { MoonIcon, SunIcon } from "@heroicons/react/24/outline";
 
+function subscribe() {
+  return () => {};
+}
+
 export const SwitchTheme = ({ className }: { className?: string }) => {
   const { setTheme, resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  // False during SSR and hydration, true once mounted: same timing as the
+  // previous mounted-flag effect, without setting state inside an effect.
+  const mounted = useSyncExternalStore(
+    subscribe,
+    () => true,
+    () => false,
+  );
 
   const isDarkMode = resolvedTheme === "dark";
 
@@ -17,10 +27,6 @@ export const SwitchTheme = ({ className }: { className?: string }) => {
     }
     setTheme("dark");
   };
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   if (!mounted) return null;
 

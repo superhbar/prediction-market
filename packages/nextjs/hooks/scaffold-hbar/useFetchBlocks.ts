@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Block,
   Hash,
@@ -35,58 +35,65 @@ export const useFetchBlocks = (enabled = true) => {
 
   const testClient = useMemo(() => (enabled ? createLocalChainClient() : null), [enabled]);
 
-  const fetchBlocks = useCallback(async () => {
-    if (!testClient || !enabled) return;
-    setError(null);
-
-    try {
-      const blockNumber = await testClient.getBlockNumber();
-      setTotalBlocks(blockNumber);
-
-      const startingBlock = blockNumber - BigInt(currentPage * BLOCKS_PER_PAGE);
-      const blockNumbersToFetch = Array.from(
-        { length: Number(BLOCKS_PER_PAGE < startingBlock + 1n ? BLOCKS_PER_PAGE : startingBlock + 1n) },
-        (_, i) => startingBlock - BigInt(i),
-      );
-
-      const blocksWithTransactions = blockNumbersToFetch.map(async blockNum => {
-        try {
-          return testClient.getBlock({ blockNumber: blockNum, includeTransactions: true });
-        } catch (err) {
-          setError(err instanceof Error ? err : new Error("An error occurred."));
-          throw err;
-        }
-      });
-      const fetchedBlocks = await Promise.all(blocksWithTransactions);
-
-      fetchedBlocks.forEach(block => {
-        block.transactions.forEach(tx => decodeTransactionData(tx as Transaction));
-      });
-
-      const txReceipts = await Promise.all(
-        fetchedBlocks.flatMap(block =>
-          block.transactions.map(async tx => {
-            try {
-              const receipt = await testClient.getTransactionReceipt({ hash: (tx as Transaction).hash });
-              return { [(tx as Transaction).hash]: receipt };
-            } catch (err) {
-              setError(err instanceof Error ? err : new Error("An error occurred."));
-              throw err;
-            }
-          }),
-        ),
-      );
-
-      setBlocks(fetchedBlocks);
-      setTransactionReceipts(prevReceipts => ({ ...prevReceipts, ...Object.assign({}, ...txReceipts) }));
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error("An error occurred."));
-    }
-  }, [currentPage, testClient, enabled]);
-
   useEffect(() => {
-    if (enabled && testClient) fetchBlocks();
-  }, [enabled, testClient, fetchBlocks]);
+    if (!enabled || !testClient) return;
+    let cancelled = false;
+
+    // All state updates below happen in async continuations, never synchronously in the effect body.
+    (async () => {
+      try {
+        const blockNumber = await testClient.getBlockNumber();
+        if (cancelled) return;
+        setTotalBlocks(blockNumber);
+        setError(null);
+
+        const startingBlock = blockNumber - BigInt(currentPage * BLOCKS_PER_PAGE);
+        const blockNumbersToFetch = Array.from(
+          { length: Number(BLOCKS_PER_PAGE < startingBlock + 1n ? BLOCKS_PER_PAGE : startingBlock + 1n) },
+          (_, i) => startingBlock - BigInt(i),
+        );
+
+        const blocksWithTransactions = blockNumbersToFetch.map(async blockNum => {
+          try {
+            return testClient.getBlock({ blockNumber: blockNum, includeTransactions: true });
+          } catch (err) {
+            if (!cancelled) setError(err instanceof Error ? err : new Error("An error occurred."));
+            throw err;
+          }
+        });
+        const fetchedBlocks = await Promise.all(blocksWithTransactions);
+        if (cancelled) return;
+
+        fetchedBlocks.forEach(block => {
+          block.transactions.forEach(tx => decodeTransactionData(tx as Transaction));
+        });
+
+        const txReceipts = await Promise.all(
+          fetchedBlocks.flatMap(block =>
+            block.transactions.map(async tx => {
+              try {
+                const receipt = await testClient.getTransactionReceipt({ hash: (tx as Transaction).hash });
+                return { [(tx as Transaction).hash]: receipt };
+              } catch (err) {
+                if (!cancelled) setError(err instanceof Error ? err : new Error("An error occurred."));
+                throw err;
+              }
+            }),
+          ),
+        );
+        if (cancelled) return;
+
+        setBlocks(fetchedBlocks);
+        setTransactionReceipts(prevReceipts => ({ ...prevReceipts, ...Object.assign({}, ...txReceipts) }));
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err : new Error("An error occurred."));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage, enabled, testClient]);
 
   useEffect(() => {
     if (!enabled || !testClient) return;

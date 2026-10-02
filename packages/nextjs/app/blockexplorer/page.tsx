@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { PaginationButton, SearchBar, TransactionsTable } from "./_components";
 import type { NextPage } from "next";
 import { Block, Transaction, TransactionReceipt } from "viem";
@@ -16,7 +16,8 @@ const BlockExplorer: NextPage = () => {
   const { blocks, transactionReceipts, currentPage, totalBlocks, setCurrentPage, error } =
     useFetchBlocks(isLocalNetwork);
   const allContracts = useAllContracts();
-  const [hasError, setHasError] = useState(false);
+
+  const hasError = targetNetwork.id === hardhat.id && error != null;
 
   const contractAddresses = useMemo(
     () => new Set(Object.values(allContracts).map(c => c.address.toLowerCase())),
@@ -39,12 +40,6 @@ const BlockExplorer: NextPage = () => {
       }))
       .filter(block => block.transactions.length > 0) as Block[];
   }, [blocks, transactionReceipts, contractAddresses]);
-
-  useEffect(() => {
-    if (targetNetwork.id === hardhat.id && error) {
-      setHasError(true);
-    }
-  }, [targetNetwork.id, error]);
 
   useEffect(() => {
     if (hasError) {

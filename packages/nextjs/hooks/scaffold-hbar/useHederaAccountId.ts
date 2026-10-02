@@ -2,29 +2,29 @@ import { useEffect, useState } from "react";
 import { chainIdToHederaNetwork, getHederaAccountId } from "~~/utils/scaffold-hbar";
 
 export function useHederaAccountId(evmAddress: string | undefined, chainId?: number) {
-  const [accountId, setAccountId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [resolved, setResolved] = useState<{ address: string | undefined; chainId?: number; accountId: string | null }>(
+    {
+      address: undefined,
+      chainId: undefined,
+      accountId: null,
+    },
+  );
 
   useEffect(() => {
     if (!evmAddress) {
-      setAccountId(null);
       return;
     }
 
     let cancelled = false;
     const network = chainIdToHederaNetwork(chainId ?? 296);
 
-    setIsLoading(true);
-
+    // State updates happen in the async fetch callbacks, not synchronously in the effect.
     getHederaAccountId(evmAddress, network)
       .then(id => {
-        if (!cancelled) setAccountId(id);
+        if (!cancelled) setResolved({ address: evmAddress, chainId, accountId: id });
       })
       .catch(() => {
-        if (!cancelled) setAccountId(null);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setResolved({ address: evmAddress, chainId, accountId: null });
       });
 
     return () => {
@@ -32,5 +32,11 @@ export function useHederaAccountId(evmAddress: string | undefined, chainId?: num
     };
   }, [evmAddress, chainId]);
 
-  return { accountId, isLoading };
+  if (!evmAddress) {
+    return { accountId: null as string | null, isLoading: false };
+  }
+
+  // Derived during render: a result belongs to the current request only when it resolved for it.
+  const isLoading = resolved.address !== evmAddress || resolved.chainId !== chainId;
+  return { accountId: resolved.accountId, isLoading };
 }
