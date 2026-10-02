@@ -21,7 +21,7 @@ export async function fetchHbarPrice(): Promise<number> {
     cache = { price, timestamp: now };
     return price;
   } catch (error) {
-    console.error("Failed to fetch HBAR price:", error);
+    console.warn("Failed to fetch HBAR price:", error);
     return cache?.price ?? 0;
   }
 }

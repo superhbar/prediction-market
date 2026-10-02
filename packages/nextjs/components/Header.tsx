@@ -88,7 +88,10 @@ export const Header = () => {
           </span>
         </Link>
         <Link href="/" passHref className="flex lg:hidden items-baseline gap-2 ml-1 mr-4 shrink-0">
-          <span className="font-editorial font-black text-lg tracking-tight">prediction-market</span>
+          <span className="font-editorial font-black text-lg tracking-tight hidden sm:inline">prediction-market</span>
+          <span className="font-editorial font-black text-xl tracking-tight sm:hidden" aria-label="prediction-market">
+            pm.
+          </span>
         </Link>
         <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2 ml-4">
           <HeaderMenuLinks />

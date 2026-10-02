@@ -56,7 +56,7 @@ const Home = () => {
         </Link>
       </div>
 
-      <div className="mt-6 pb-16">
+      <div className="mt-6 pb-12">
         {isLoading && count === undefined ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <MarketCardSkeleton />
@@ -97,8 +97,38 @@ const Home = () => {
           </div>
         )}
       </div>
+
+      <section className="border-t-2 border-base-content pt-6 pb-16" aria-labelledby="how-it-works">
+        <h2 id="how-it-works" className="text-[12px] uppercase tracking-[0.2em] text-base-content/60 m-0 font-normal">
+          How it works
+        </h2>
+        <ol className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-4 list-none p-0">
+          {HOW_IT_WORKS.map((step, index) => (
+            <li key={step.title}>
+              <p className="font-editorial font-black text-4xl leading-none m-0 text-primary">{index + 1}</p>
+              <p className="font-editorial font-bold text-xl mt-3 mb-0">{step.title}</p>
+              <p className="text-sm leading-relaxed mt-2 mb-0 opacity-80">{step.body}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
     </div>
   );
 };
+
+const HOW_IT_WORKS = [
+  {
+    title: "Stake on a side",
+    body: "Every stake mints YES or NO position tokens on the Hedera Token Service, one token per HBAR, held in your own account.",
+  },
+  {
+    title: "Hedera settles it",
+    body: "Creating a market books a scheduled call (HIP-1215). After expiry the network runs it and reads the first Chainlink price at or after expiry. No keeper, no admin.",
+  },
+  {
+    title: "Winners redeem",
+    body: "Winning tokens redeem for a share of the whole pool. If no price arrives within the grace period, the market voids and every stake refunds 1:1.",
+  },
+];
 
 export default Home;
