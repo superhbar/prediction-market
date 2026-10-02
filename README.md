@@ -140,7 +140,7 @@ Rounds more than 2 hours after expiry are rejected (`maxRoundLag`), so a market 
 
 Each market has a YES token and a NO token: HTS fungible tokens with 8 decimals, created by the contract, which holds treasury, supply key, and wipe key. Staking mints tokens equal to `msg.value` and transfers them to the staker. Redeem wipes the caller's tokens with the wipe key (HTS `burnToken` only burns from the treasury, so wiping is the correct primitive) and pays HBAR in the same transaction, with no approve step.
 
-Payout equals `amount * totalPool / winningPool` and is read from the contract's `quotePayout`: the number the frontend shows is the number the contract pays. One-sided markets (only YES or only NO staked) and voided markets refund 1:1. Rounding dust from integer division stays in the contract.
+Payout equals `amount * totalPool / winningPool` and is read from the contract's `quotePayout`: the redeem amount the frontend shows is the number the contract pays. Before you stake, the form previews what the stake would pay if its side won at current pool sizes (`projectedPayout` in `utils/markets/units.ts`, the same formula); later stakes move that number. One-sided markets (only YES or only NO staked) and voided markets refund 1:1. Rounding dust from integer division stays in the contract.
 
 ### Units (tinybar vs weibar)
 
@@ -197,7 +197,7 @@ yarn next:test
 
 `yarn foundry:test` runs 78 unit tests. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent. `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
 
-`yarn next:test` runs vitest for units, feeds, status, and Hashscan helpers. The frontend shows the contract's own `quotePayout`, so payout math is not reimplemented or retested there.
+`yarn next:test` runs vitest for units (including the pre-stake payout preview), feeds, status, Hashscan helpers and the HBAR price conversion. Redeem amounts come from the contract's own `quotePayout`.
 
 Before pushing, also run the type and build gates:
 
@@ -235,7 +235,7 @@ Full lifecycle run with `yarn foundry:e2e:testnet` on 2026-10-02 against the dep
 
 1. Change `quotePayout` in `packages/foundry/contracts/PredictionMarkets.sol`. It is the single payout definition: `redeem` pays exactly what it quotes.
 2. Keep the invariant: total winner payouts never exceed `yesPool + noPool`. Extend the fuzz test in `packages/foundry/test/PredictionMarkets.t.sol` (`testFuzz_WinnersNeverExceedPool`) for the new math.
-3. Do not reimplement payout math in the frontend. It already displays `quotePayout` as-is.
+3. Redeem amounts in the frontend already come from `quotePayout`. Update the pre-stake preview, `projectedPayout` in `packages/nextjs/utils/markets/units.ts`, to the same formula, and its test in `units.test.ts`.
 
 ### Add a creator fee
 

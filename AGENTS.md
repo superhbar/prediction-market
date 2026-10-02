@@ -45,7 +45,7 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 - `totalPoolLiability` (owed to traders) and `totalReserves` (sum of market reserves) are updated on every stake, redeem, reserve charge, and withdrawal. `withdrawReserve` pays at most balance surplus beyond both; underestimates land on the creator.
 - Tinybar inside the contract, always. No rescaling in Solidity; conversion lives only in `utils/markets/units.ts`.
 - Frontend uses explicit gas limits from `units.ts` GAS (createMarket 3M, stake 1.5M, settle/settleWithPyth 1M, redeem 800k, void/withdraw 300k). Do not rely on estimation.
-- Frontend shows `quotePayout` as-is. Never reimplement payout math in TS.
+- Redeem amounts in the UI come from `quotePayout` as-is (it returns 0 until settlement). The only payout math in TS is `projectedPayout` in `utils/markets/units.ts`, the pre-stake "pays if this side wins" estimate; it must stay the same formula as `quotePayout` and stay labelled as an estimate.
 
 ## Hedera gotchas
 
@@ -64,7 +64,7 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 ## Safe extension points
 
 - Feeds: `HelperConfig.s.sol` (`buildFeedKeys`, `buildFeeds`) + `FEED_KEYS` in `utils/markets/feeds.ts`. Feeds are immutable per deployment.
-- Payout: `quotePayout` is the single definition; extend the fuzz tests with any model change.
+- Payout: `quotePayout` is the on-chain definition; extend the fuzz tests with any model change, and change `projectedPayout` in `units.ts` to match.
 - Fees: skim in `stake` into reserve or a recorded balance; keep `totalPoolLiability` trader-only; update `useCreationEstimate.ts`.
 - UI: `components/markets/` and `hooks/markets/`; status derivation in `utils/markets/status.ts`.
 
@@ -82,5 +82,5 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 - No `forge script --broadcast` to Hashio. Use the `cast send` path in `scripts-js/`.
 - No Pyth key (or any secret) in client code or `NEXT_PUBLIC_` vars.
 - No hand edits to `deployedContracts.ts`. Regenerate via deploy.
-- No frontend payout math. Read `quotePayout`.
+- No frontend payout math for redeem amounts. Read `quotePayout`. `projectedPayout` is the single, tested exception.
 - No mainnet deploy without an audit. Mainnet addresses in `HelperConfig` are reference only.
