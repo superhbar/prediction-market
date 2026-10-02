@@ -3,7 +3,7 @@ import { Countdown } from "./Countdown";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { hashscanLink } from "~~/utils/markets/hashscan";
 import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
-import { type MarketFilter, outcomeLabel, statusLabel } from "~~/utils/markets/status";
+import { type MarketFilter, resolutionLabel, statusLabel } from "~~/utils/markets/status";
 import type { Market, UiStatus } from "~~/utils/markets/types";
 import { formatHbar, yesPercent } from "~~/utils/markets/units";
 
@@ -43,7 +43,7 @@ export function MarketCard({ marketId, market, status, chainId }: MarketCardProp
             status === "settled" ? "bg-primary text-primary-content" : "border border-base-300"
           }`}
         >
-          {status === "settled" ? `Resolved ${outcomeLabel(market.outcome)}` : statusLabel(status)}
+          {status === "settled" ? resolutionLabel(market) : statusLabel(status)}
         </span>
       </div>
       <div className="flex items-center justify-between text-sm text-base-content/70">

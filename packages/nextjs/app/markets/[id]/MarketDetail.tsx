@@ -14,7 +14,7 @@ import { useMarket } from "~~/hooks/markets/useMarket";
 import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
-import { deriveStatus, outcomeLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
+import { deriveStatus, isRefund, resolutionLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
 import { type Market, MarketOutcome, MarketState } from "~~/utils/markets/types";
 import { formatPrice } from "~~/utils/markets/units";
 
@@ -109,13 +109,13 @@ function Resolution({ market }: { market: Market }) {
   const voided = market.state === MarketState.Voided;
   return (
     <section className="mb-8 border-y-2 border-base-content py-4 flex flex-col md:flex-row md:items-baseline gap-x-6 gap-y-1">
-      <p className="font-editorial font-black text-3xl m-0 whitespace-nowrap">
-        {voided ? "Voided" : `Resolved ${outcomeLabel(market.outcome)}`}
-      </p>
+      <p className="font-editorial font-black text-3xl m-0 whitespace-nowrap">{resolutionLabel(market)}</p>
       <p className="text-sm m-0 opacity-80">
         {voided
           ? "No oracle price settled this market in time. Every position redeems 1:1 for the HBAR staked."
-          : `${sourceLabel(market.source)} read ${formatPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatPrice(market.strike)}. Holders of the winning token redeem below.`}
+          : isRefund(market)
+            ? "Only one side had stakes, so there was nothing to win. Every position redeems 1:1 for the HBAR staked."
+            : `${sourceLabel(market.source)} read ${formatPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatPrice(market.strike)}. Holders of the winning token redeem below.`}
       </p>
     </section>
   );

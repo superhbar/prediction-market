@@ -1,4 +1,4 @@
-import { deriveStatus, matchesFilter, statusLabel } from "./status";
+import { deriveStatus, isRefund, matchesFilter, resolutionLabel, statusLabel } from "./status";
 import type { Market, MarketConfig } from "./types";
 import { describe, expect, it } from "vitest";
 
@@ -73,5 +73,21 @@ describe("statusLabel", () => {
   it("labels every status", () => {
     expect(statusLabel("settle-available")).toBe("Settle available");
     expect(statusLabel("voidable")).toBe("Voidable");
+  });
+});
+
+describe("refunds", () => {
+  it("treats voided and one-sided settled markets as refunds", () => {
+    expect(isRefund({ state: 2, outcome: 0 })).toBe(true);
+    expect(isRefund({ state: 1, outcome: 3 })).toBe(true);
+    expect(isRefund({ state: 1, outcome: 2 })).toBe(false);
+    expect(isRefund({ state: 0, outcome: 0 })).toBe(false);
+  });
+
+  it("labels each resolution", () => {
+    expect(resolutionLabel({ state: 1, outcome: 1 })).toBe("Resolved YES");
+    expect(resolutionLabel({ state: 1, outcome: 2 })).toBe("Resolved NO");
+    expect(resolutionLabel({ state: 1, outcome: 3 })).toBe("Refunded");
+    expect(resolutionLabel({ state: 2, outcome: 0 })).toBe("Voided");
   });
 });

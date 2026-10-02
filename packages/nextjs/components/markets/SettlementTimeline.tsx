@@ -146,20 +146,26 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
             : retriesUsed > 0
               ? `The scheduled call booked ${retriesUsed} ${retriesUsed === 1 ? "retry" : "retries"} from the market reserve. ${market.retriesLeft} of ${config.maxRetries} left.`
               : isSettled
-                ? "Not needed: a round existed at the first attempt."
+                ? market.source === PriceSource.None
+                  ? "Not needed."
+                  : "Not needed: a round existed at the first attempt."
                 : `Up to ${config.maxRetries} retries, ${Number(config.retryDelay) / 60} minutes apart, paid from the market reserve.`}
         </Step>
         <Step
           state={isSettled ? "done" : expired && isOpen ? "active" : "pending"}
           title={
             isSettled
-              ? `Settled ${outcomeLabel(market.outcome)} via ${sourceLabel(market.source)}`
+              ? market.source === PriceSource.None
+                ? "Settled as a refund: one side had no stakes"
+                : `Settled ${outcomeLabel(market.outcome)} via ${sourceLabel(market.source)}`
               : "Settle on the first Chainlink price at or after expiry"
           }
         >
           {isSettled && market.source !== PriceSource.None
             ? `${formatPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatPrice(market.strike)}.`
-            : "A price published before expiry is never used, so nobody can trade on a price that is already known."}
+            : isSettled
+              ? "No oracle read was needed. Every position redeems 1:1."
+              : "A price published before expiry is never used, so nobody can trade on a price that is already known."}
         </Step>
         <Step
           state={

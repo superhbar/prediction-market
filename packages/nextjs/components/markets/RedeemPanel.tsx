@@ -4,7 +4,7 @@ import { useAccount } from "wagmi";
 import { useReadContracts } from "wagmi";
 import { erc20BalanceAbi } from "~~/hooks/markets/abis";
 import { useScaffoldReadContract, useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-hbar";
-import type { Market } from "~~/utils/markets/types";
+import { type Market, MarketState } from "~~/utils/markets/types";
 import { GAS, formatHbar } from "~~/utils/markets/units";
 
 type RedeemPanelProps = {
@@ -16,7 +16,7 @@ type RedeemPanelProps = {
 export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
   const { address: account } = useAccount();
   const { targetNetwork } = useTargetNetwork();
-  const redeemable = market.state === 1 || market.state === 2;
+  const redeemable = market.state === MarketState.Settled || market.state === MarketState.Voided;
 
   const { data: balances } = useReadContracts({
     contracts:

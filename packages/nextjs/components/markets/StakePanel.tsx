@@ -8,6 +8,7 @@ import { useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-hb
 import { useScaffoldReadContract } from "~~/hooks/scaffold-hbar";
 import { longZeroToEntityId, mirrorBaseForChain } from "~~/utils/markets/hashscan";
 import { fetchAccount, fetchIsTokenAssociated } from "~~/utils/markets/mirror";
+import { isRefund } from "~~/utils/markets/status";
 import { type Market, MarketState } from "~~/utils/markets/types";
 import { GAS, formatHbar, hbarToTinybar, hbarToWeibar, isPositiveDecimal, yesPercent } from "~~/utils/markets/units";
 import { notification } from "~~/utils/scaffold-hbar";
@@ -116,10 +117,10 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
       <div className="border border-base-300 bg-base-100 p-7">
         <p className="text-[12px] uppercase tracking-[0.2em] text-base-content/60 m-0">Trading closed</p>
         <p className="font-editorial text-xl leading-snug mt-3 mb-0">
-          {market.state === MarketState.Settled
-            ? "This market is resolved. Winning tokens redeem for a share of the whole pool."
-            : market.state === MarketState.Voided
-              ? "This market was voided. Every position redeems 1:1 for the HBAR staked."
+          {isRefund(market)
+            ? "Every position in this market redeems 1:1 for the HBAR staked."
+            : market.state === MarketState.Settled
+              ? "This market is resolved. Winning tokens redeem for a share of the whole pool."
               : "Expiry has passed. The scheduled settlement reads the first oracle price at or after expiry."}
         </p>
         <p className="text-sm opacity-70 mt-3 mb-0">

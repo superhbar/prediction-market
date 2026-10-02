@@ -57,6 +57,21 @@ export function statusLabel(status: UiStatus): string {
   }
 }
 
+/**
+ * True when positions refund 1:1 instead of paying a winner: the market was voided, or it settled
+ * with outcome Invalid because one side had no stakes (the contract skips the oracle in that case).
+ */
+export function isRefund(market: Pick<Market, "state" | "outcome">): boolean {
+  return market.state === MarketState.Voided || market.outcome === MarketOutcome.Invalid;
+}
+
+/** Headline for a closed market: "Resolved YES", "Resolved NO", "Refunded" or "Voided". */
+export function resolutionLabel(market: Pick<Market, "state" | "outcome">): string {
+  if (market.state === MarketState.Voided) return "Voided";
+  if (market.outcome === MarketOutcome.Invalid) return "Refunded";
+  return `Resolved ${outcomeLabel(market.outcome)}`;
+}
+
 /** Outcome label for a settled market. */
 export function outcomeLabel(outcome: number): string {
   if (outcome === MarketOutcome.Yes) return "YES";
