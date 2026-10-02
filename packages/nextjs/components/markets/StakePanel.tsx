@@ -8,7 +8,7 @@ import { useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-hb
 import { useScaffoldReadContract } from "~~/hooks/scaffold-hbar";
 import { longZeroToEntityId, mirrorBaseForChain } from "~~/utils/markets/hashscan";
 import { fetchAccount, fetchIsTokenAssociated } from "~~/utils/markets/mirror";
-import type { Market } from "~~/utils/markets/types";
+import { type Market, MarketState } from "~~/utils/markets/types";
 import { GAS, formatHbar, hbarToTinybar, hbarToWeibar, isPositiveDecimal, yesPercent } from "~~/utils/markets/units";
 import { notification } from "~~/utils/scaffold-hbar";
 
@@ -29,7 +29,7 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
   const yes = side === "YES";
   const token: Address = yes ? market.yesToken : market.noToken;
   const [nowMs] = useState(() => Date.now());
-  const tradingOpen = market.state === 0 && nowMs < Number(market.expiry) * 1000;
+  const tradingOpen = market.state === MarketState.Open && nowMs < Number(market.expiry) * 1000;
   const amountValid = isPositiveDecimal(amount);
   const amountTinybar = amountValid ? hbarToTinybar(amount) : undefined;
   const assocKey = account && tradingOpen ? `${account}:${token}:${targetNetwork.id}` : "";
@@ -111,6 +111,25 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
 
   const yesPct = Math.round(yesPercent(market.yesPool, market.noPool));
 
+  if (!tradingOpen) {
+    return (
+      <div className="border border-base-300 bg-base-100 p-7">
+        <p className="text-[12px] uppercase tracking-[0.2em] text-base-content/60 m-0">Trading closed</p>
+        <p className="font-editorial text-xl leading-snug mt-3 mb-0">
+          {market.state === MarketState.Settled
+            ? "This market is resolved. Winning tokens redeem for a share of the whole pool."
+            : market.state === MarketState.Voided
+              ? "This market was voided. Every position redeems 1:1 for the HBAR staked."
+              : "Expiry has passed. The scheduled settlement reads the first oracle price at or after expiry."}
+        </p>
+        <p className="text-sm opacity-70 mt-3 mb-0">
+          {formatHbar(market.yesPool + market.noPool)} pooled: {formatHbar(market.yesPool)} on YES,{" "}
+          {formatHbar(market.noPool)} on NO.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="border border-base-300 bg-base-100 p-7">
       <p className="text-[12px] uppercase tracking-[0.2em] text-base-content/60 m-0">Take a side</p>
@@ -159,11 +178,11 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
       <dl className="text-sm space-y-2">
         <div className="flex justify-between">
           <dt className="opacity-70">You receive</dt>
-          <dd className="font-semibold">{amountValid ? `${amount} ${side} tokens` : "—"}</dd>
+          <dd className="font-semibold">{amountValid ? `${amount} ${side} tokens` : "-"}</dd>
         </div>
         <div className="flex justify-between">
           <dt className="opacity-70">Redeem value now</dt>
-          <dd className="font-semibold">{quote !== undefined ? formatHbar(quote as bigint) : "—"}</dd>
+          <dd className="font-semibold">{quote !== undefined ? formatHbar(quote as bigint) : "-"}</dd>
         </div>
       </dl>
 
@@ -180,13 +199,9 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
       <button
         className="btn w-full mt-4 bg-neutral text-neutral-content rounded-full"
         onClick={stake}
-        disabled={!account || !tradingOpen || !amountValid || isStaking || association === "needs-association"}
+        disabled={!account || !amountValid || isStaking || association === "needs-association"}
       >
-        {!tradingOpen
-          ? "Trading closed"
-          : isStaking
-            ? "Staking…"
-            : `Stake ${amountValid ? amount : "—"} HBAR on ${side}`}
+        {isStaking ? "Staking…" : `Stake ${amountValid ? amount : "-"} HBAR on ${side}`}
       </button>
       <p className="text-[13px] mt-3 opacity-70 font-editorial italic">
         First stake on a token triggers a one-time auto-association fee.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { parseEther } from "viem";
 import { useAccount } from "wagmi";
 import { useFeedInfo } from "~~/hooks/markets/useFeedInfo";
@@ -9,8 +9,9 @@ import { useScheduleStatus } from "~~/hooks/markets/useScheduleStatus";
 import { useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-hbar";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { hashscanLink } from "~~/utils/markets/hashscan";
-import { deriveStatus, outcomeLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
-import type { Market } from "~~/utils/markets/types";
+import { shortExpiry } from "~~/utils/markets/question";
+import { deriveStatus, outcomeLabel, sourceLabel } from "~~/utils/markets/status";
+import { type Market, MarketState, PriceSource } from "~~/utils/markets/types";
 import { GAS, formatPrice } from "~~/utils/markets/units";
 import { notification } from "~~/utils/scaffold-hbar";
 
@@ -64,8 +65,11 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
 
   const status = config === undefined ? "awaiting-settlement" : deriveStatus(market, BigInt(nowSec), config);
   const expired = BigInt(nowSec) >= market.expiry;
-  const isOpen = market.state === 0;
+  const isOpen = market.state === MarketState.Open;
+  const isSettled = market.state === MarketState.Settled;
+  const isVoided = market.state === MarketState.Voided;
   const voidable = status === "voidable";
+  const retriesUsed = config ? config.maxRetries - market.retriesLeft : 0;
 
   const settleNow = async () => {
     try {
@@ -108,68 +112,77 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
 
   return (
     <div>
-      <h2 className="font-editorial font-bold text-2xl mt-10 mb-4">How settlement reads</h2>
-      <div className="relative pl-24">
-        <div className="absolute left-[74px] top-1 bottom-1 w-px bg-primary/40" aria-hidden />
-        <div className="relative pb-8">
-          <span className="absolute left-[-6rem] w-16 text-right text-xs text-base-content/60">scheduled</span>
-          <span
-            className="absolute left-[-34px] top-0 w-4 h-4 rounded-full border-2 border-primary bg-base-200"
-            aria-hidden
-          />
-          <p className="text-[11px] uppercase tracking-[0.18em] text-primary font-semibold m-0">Step 1 of 4</p>
-          <p className="font-semibold m-0 mt-1">Settlement scheduled on-chain (HIP-1215)</p>
+      <h2 className="font-editorial font-bold text-2xl mt-10 mb-5">How this market settles</h2>
+      <ol className="relative list-none m-0 p-0 pl-8">
+        <span className="absolute left-[7px] top-2 bottom-2 w-px bg-base-300" aria-hidden />
+        <Step state={scheduleId ? "done" : "pending"} title="Settlement scheduled on-chain (HIP-1215)">
           {scheduleId ? (
-            <a
-              href={hashscanLink(targetNetwork.id, "schedule", scheduleId)}
-              target="_blank"
-              rel="noreferrer"
-              className="link text-primary text-sm"
-            >
-              Schedule {scheduleId} on Hashscan
-            </a>
-          ) : (
-            <p className="text-sm text-base-content/60 m-0">No schedule recorded.</p>
-          )}
-          <p className="text-sm text-base-content/60 m-0 mt-1">
-            {scheduleLoading ? "Checking schedule…" : `Mirror status: ${scheduleStatus}`}
-            {schedule?.executedTimestamp && ` at ${schedule.executedTimestamp}`}
-          </p>
-        </div>
-        <div className="relative pb-8">
-          <span className="absolute left-[-6rem] w-16 text-right text-xs text-base-content/60">retries</span>
-          <span className="absolute left-[-32px] top-1 w-2.5 h-2.5 rounded-full bg-base-300" aria-hidden />
-          <p className="font-semibold m-0">Auto-retry if no oracle round yet</p>
-          <p className="text-sm opacity-70 m-0">
-            {config ? `${market.retriesLeft} of ${config.maxRetries} retries left.` : "Checking retries…"}
-          </p>
-        </div>
-        <div className="relative pb-8">
-          <span className="absolute left-[-6rem] w-16 text-right text-xs text-base-content/60">outcome</span>
-          <span className="absolute left-[-32px] top-1 w-2.5 h-2.5 rounded-full bg-base-300" aria-hidden />
-          {market.state === 1 ? (
             <>
-              <p className="font-semibold m-0">
-                Settled {outcomeLabel(market.outcome)} via {sourceLabel(market.source)}
-              </p>
-              {market.source !== 0 && (
-                <p className="text-sm opacity-70 m-0">
-                  Price {formatPrice(market.settlementPrice)} at{" "}
-                  {new Date(Number(market.settlementTime) * 1000).toLocaleString("en-US", { timeZone: "UTC" })} UTC.
-                </p>
-              )}
+              <a
+                href={hashscanLink(targetNetwork.id, "schedule", scheduleId)}
+                target="_blank"
+                rel="noreferrer"
+                className="link text-primary"
+              >
+                {retriesUsed > 0 ? "Latest schedule" : "Schedule"} {scheduleId} on Hashscan
+              </a>
+              <br />
+              {scheduleLoading
+                ? "Checking the mirror node…"
+                : schedule?.executedTimestamp
+                  ? `Executed by the network at ${shortExpiry(BigInt(Math.floor(Number(schedule.executedTimestamp))))}, no keeper involved.`
+                  : `Mirror node status: ${scheduleStatus}.`}
             </>
           ) : (
-            <p className="font-semibold m-0">Settles on first Chainlink price at or after expiry</p>
+            "No schedule recorded."
           )}
-        </div>
-        <div className="relative">
-          <span className="absolute left-[-6rem] w-16 text-right text-xs text-base-content/60">fallback</span>
-          <span className="absolute left-[-32px] top-1 w-2.5 h-2.5 rounded-full bg-base-300" aria-hidden />
-          <p className="font-semibold m-0">Fallback: anyone can settle with Pyth, or void after the grace period</p>
-          <p className="text-sm opacity-70 m-0">Status: {statusLabel(status)}.</p>
-        </div>
-      </div>
+        </Step>
+        <Step
+          state={retriesUsed > 0 ? "done" : isSettled ? "skipped" : "pending"}
+          title="Retry if no oracle round exists yet"
+        >
+          {!config
+            ? "Checking retries…"
+            : retriesUsed > 0
+              ? `The scheduled call booked ${retriesUsed} ${retriesUsed === 1 ? "retry" : "retries"} from the market reserve. ${market.retriesLeft} of ${config.maxRetries} left.`
+              : isSettled
+                ? "Not needed: a round existed at the first attempt."
+                : `Up to ${config.maxRetries} retries, ${Number(config.retryDelay) / 60} minutes apart, paid from the market reserve.`}
+        </Step>
+        <Step
+          state={isSettled ? "done" : expired && isOpen ? "active" : "pending"}
+          title={
+            isSettled
+              ? `Settled ${outcomeLabel(market.outcome)} via ${sourceLabel(market.source)}`
+              : "Settle on the first Chainlink price at or after expiry"
+          }
+        >
+          {isSettled && market.source !== PriceSource.None
+            ? `${formatPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatPrice(market.strike)}.`
+            : "A price published before expiry is never used, so nobody can trade on a price that is already known."}
+        </Step>
+        <Step
+          state={
+            isVoided || market.source === PriceSource.Pyth
+              ? "done"
+              : voidable
+                ? "active"
+                : isSettled
+                  ? "skipped"
+                  : "pending"
+          }
+          title="Fallback: settle with Pyth, or void and refund"
+          last
+        >
+          {isVoided
+            ? "Voided after the grace period. Every position redeems 1:1."
+            : isSettled
+              ? "Not needed."
+              : config
+                ? `Anyone can settle with a Pyth price at or after expiry. After ${Number(config.gracePeriod) / 3600} hours unsettled, anyone can void the market.`
+                : "Checking the grace period…"}
+        </Step>
+      </ol>
 
       {!account && expired && isOpen && <p className="text-sm mt-4 opacity-70">Connect a wallet to settle or void.</p>}
       <div className="flex flex-wrap gap-2 mt-4">
@@ -195,5 +208,34 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
         )}
       </div>
     </div>
+  );
+}
+
+type StepState = "done" | "active" | "pending" | "skipped";
+
+/** One timeline row: a dot whose fill shows progress, a title and a muted detail line. */
+function Step({
+  state,
+  title,
+  last,
+  children,
+}: {
+  state: StepState;
+  title: string;
+  last?: boolean;
+  children: ReactNode;
+}) {
+  const dot =
+    state === "done"
+      ? "bg-primary border-primary"
+      : state === "active"
+        ? "bg-base-200 border-primary"
+        : "bg-base-200 border-base-300";
+  return (
+    <li className={`relative ${last ? "" : "pb-7"} ${state === "skipped" ? "opacity-50" : ""}`}>
+      <span className={`absolute -left-8 top-1 w-[15px] h-[15px] rounded-full border-2 ${dot}`} aria-hidden />
+      <p className="font-semibold m-0">{title}</p>
+      <p className="text-sm text-base-content/70 m-0 mt-1">{children}</p>
+    </li>
   );
 }

@@ -3,7 +3,7 @@ import { Countdown } from "./Countdown";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { hashscanLink } from "~~/utils/markets/hashscan";
 import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
-import { type MarketFilter, statusLabel } from "~~/utils/markets/status";
+import { type MarketFilter, outcomeLabel, statusLabel } from "~~/utils/markets/status";
 import type { Market, UiStatus } from "~~/utils/markets/types";
 import { formatHbar, yesPercent } from "~~/utils/markets/units";
 
@@ -38,7 +38,13 @@ export function MarketCard({ marketId, market, status, chainId }: MarketCardProp
         <span>
           YES <strong>{Math.round(yes)}%</strong> &middot; NO <strong>{100 - Math.round(yes)}%</strong>
         </span>
-        <span className="badge badge-outline">{statusLabel(status)}</span>
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${
+            status === "settled" ? "bg-primary text-primary-content" : "border border-base-300"
+          }`}
+        >
+          {status === "settled" ? `Resolved ${outcomeLabel(market.outcome)}` : statusLabel(status)}
+        </span>
       </div>
       <div className="flex items-center justify-between text-sm text-base-content/70">
         <span>{formatHbar(market.yesPool + market.noPool)} pooled</span>

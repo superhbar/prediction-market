@@ -13,8 +13,10 @@ import { useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarket } from "~~/hooks/markets/useMarket";
 import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
-import { marketQuestion } from "~~/utils/markets/question";
-import { deriveStatus, statusLabel } from "~~/utils/markets/status";
+import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
+import { deriveStatus, outcomeLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
+import { type Market, MarketOutcome, MarketState } from "~~/utils/markets/types";
+import { formatPrice } from "~~/utils/markets/units";
 
 /** Market detail in the editorial layout: headline, odds, chart, stake, settlement, redeem. */
 export function MarketDetail({ id }: { id: string }) {
@@ -51,18 +53,18 @@ export function MarketDetail({ id }: { id: string }) {
   return (
     <div className="max-w-[1200px] mx-auto px-6 w-full pb-16">
       <p className="text-[12px] uppercase tracking-[0.2em] mt-10 text-base-content/60 m-0">
-        No. {id} &middot; {feedLabel} &middot; Market {id}
+        No. {id} &middot; {feedLabel} &middot; {statusLabel(status)}
       </p>
       <h1 className="font-editorial font-black leading-[1.02] mt-3 text-4xl md:text-6xl max-w-4xl">
         {marketQuestion(feedLabel, market.strike, market.expiry)}
       </h1>
 
       <div className="mt-8">
-        <OddsBar yesPool={market.yesPool} noPool={market.noPool} />
+        <Resolution market={market} />
+        <OddsBar yesPool={market.yesPool} noPool={market.noPool} winner={winnerOf(market)} />
         <div className="flex items-center gap-4 py-1 text-sm">
-          {status === "open" ? (
-            <Countdown targetSec={market.expiry} label="Closes in" />
-          ) : (
+          {status === "open" && <Countdown targetSec={market.expiry} label="Closes in" />}
+          {status !== "open" && market.state === MarketState.Open && (
             <span>Trading closed &middot; {statusLabel(status)}</span>
           )}
         </div>
@@ -78,7 +80,7 @@ export function MarketDetail({ id }: { id: string }) {
               <div className="h-40 bg-base-300 animate-pulse" />
             </div>
           ) : (
-            <PriceChart points={points} strike={market.strike} feedLabel={feedLabel} />
+            <PriceChart points={points} strike={market.strike} feedLabel={feedLabel} expiry={market.expiry} />
           )}
           <SettlementTimeline marketId={Number(id)} market={market} roundAvailable={roundAvailable} />
         </div>
@@ -90,5 +92,31 @@ export function MarketDetail({ id }: { id: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function winnerOf(market: Market): "YES" | "NO" | undefined {
+  if (market.state !== MarketState.Settled) return undefined;
+  if (market.outcome === MarketOutcome.Yes) return "YES";
+  if (market.outcome === MarketOutcome.No) return "NO";
+  return undefined;
+}
+
+/** Outcome strip for settled and voided markets: what the oracle read and what holders do next. */
+function Resolution({ market }: { market: Market }) {
+  if (market.state === MarketState.Open) return null;
+
+  const voided = market.state === MarketState.Voided;
+  return (
+    <section className="mb-8 border-y-2 border-base-content py-4 flex flex-col md:flex-row md:items-baseline gap-x-6 gap-y-1">
+      <p className="font-editorial font-black text-3xl m-0 whitespace-nowrap">
+        {voided ? "Voided" : `Resolved ${outcomeLabel(market.outcome)}`}
+      </p>
+      <p className="text-sm m-0 opacity-80">
+        {voided
+          ? "No oracle price settled this market in time. Every position redeems 1:1 for the HBAR staked."
+          : `${sourceLabel(market.source)} read ${formatPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatPrice(market.strike)}. Holders of the winning token redeem below.`}
+      </p>
+    </section>
   );
 }

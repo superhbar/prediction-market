@@ -86,7 +86,7 @@ export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
       {yesBalance > 0n && (
         <div className="flex items-center justify-between gap-2 mt-3 text-sm">
           <span>
-            {formatHbar(yesBalance)} YES &middot; pays {yesQuote !== undefined ? formatHbar(yesQuote as bigint) : "—"}
+            {formatHbar(yesBalance)} YES &middot; pays {yesQuote !== undefined ? formatHbar(yesQuote as bigint) : "-"}
           </span>
           <button
             className="btn btn-sm btn-primary"
@@ -100,7 +100,7 @@ export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
       {noBalance > 0n && (
         <div className="flex items-center justify-between gap-2 mt-3 text-sm">
           <span>
-            {formatHbar(noBalance)} NO &middot; pays {noQuote !== undefined ? formatHbar(noQuote as bigint) : "—"}
+            {formatHbar(noBalance)} NO &middot; pays {noQuote !== undefined ? formatHbar(noQuote as bigint) : "-"}
           </span>
           <button
             className="btn btn-sm btn-primary"

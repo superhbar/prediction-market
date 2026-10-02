@@ -5,6 +5,8 @@ type PriceChartProps = {
   points: PricePoint[];
   strike: bigint;
   feedLabel: string;
+  /** Market expiry: the first round at or after it is the settlement round and gets a marker. */
+  expiry?: bigint;
 };
 
 const WIDTH = 720;
@@ -12,7 +14,7 @@ const HEIGHT = 240;
 const PAD = 12;
 
 /** Inline SVG line chart from Chainlink rounds with a dashed strike line. No chart library. */
-export function PriceChart({ points, strike, feedLabel }: PriceChartProps) {
+export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProps) {
   if (points.length === 0) {
     return (
       <div className="border border-base-300 bg-base-100 p-5">
@@ -40,6 +42,10 @@ export function PriceChart({ points, strike, feedLabel }: PriceChartProps) {
     .join(" ");
   const strikeY = y(strike);
   const last = points[points.length - 1];
+  const lastY = y(last.normalized);
+  const settleIndex = expiry === undefined ? -1 : points.findIndex(point => point.timestamp >= expiry);
+  // Near the right edge the marker label flips to the left of its line so it is not clipped.
+  const settleLabelLeft = settleIndex >= 0 && x(settleIndex) > WIDTH * 0.7;
 
   return (
     <div className="border border-base-300 bg-base-100 p-5">
@@ -50,25 +56,60 @@ export function PriceChart({ points, strike, feedLabel }: PriceChartProps) {
         aria-label={`${feedLabel} price chart`}
       >
         <line x1="0" y1={strikeY} x2={WIDTH} y2={strikeY} stroke="#8259ef" strokeWidth="1.5" strokeDasharray="6 6" />
+        {settleIndex >= 0 && (
+          <g>
+            <line
+              x1={x(settleIndex)}
+              y1={PAD}
+              x2={x(settleIndex)}
+              y2={HEIGHT - PAD}
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeDasharray="2 4"
+              opacity="0.5"
+            />
+            <text
+              x={settleLabelLeft ? x(settleIndex) - 6 : x(settleIndex) + 6}
+              y={HEIGHT - PAD}
+              fontSize="12"
+              fill="currentColor"
+              opacity="0.7"
+              textAnchor={settleLabelLeft ? "end" : "start"}
+            >
+              Settlement round
+            </text>
+            <circle
+              cx={x(settleIndex)}
+              cy={y(points[settleIndex].normalized)}
+              r="7"
+              fill="none"
+              stroke="#8259ef"
+              strokeWidth="2"
+            />
+          </g>
+        )}
         <text
-          x={WIDTH - 8}
+          x={8}
           y={strikeY - 8}
           fontSize="13"
           fill="#8259ef"
-          textAnchor="end"
+          textAnchor="start"
           fontStyle="italic"
           fontFamily="Fraunces,serif"
         >
           Strike {formatPrice(strike)}
         </text>
         <path d={line} fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.9" />
-        <circle cx={x(points.length - 1)} cy={y(last.normalized)} r="5" fill="#8259ef" />
+        <circle cx={x(points.length - 1)} cy={lastY} r="5" fill="#8259ef" />
         <text
           x={x(points.length - 1) - 10}
-          y={y(last.normalized) - 14}
+          y={lastY - 14}
           fontSize="13"
           fontWeight="600"
           fill="currentColor"
+          stroke="var(--color-base-100)"
+          strokeWidth="4"
+          paintOrder="stroke"
           textAnchor="end"
         >
           {formatPrice(last.normalized)}
