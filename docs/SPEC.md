@@ -1,6 +1,6 @@
 # Spec: Oracle-Settled Prediction Markets (scaffold-hbar template)
 
-Working repo name: `template-hedera-prediction-market`. The owner is a placeholder until submission.
+Repo: `superhbar/prediction-market`.
 
 Status: ready-for-agent. No issue tracker exists yet; this file moves into the template repo and becomes a GitHub issue once the repo is created.
 
@@ -18,7 +18,7 @@ None of the eight built-in scaffold-hbar templates covers this pattern, and none
 
 ## Solution
 
-One command, `npm create scaffold-hbar@latest -- --template <owner>/template-hedera-prediction-market`, gives the developer a working binary prediction market on Hedera testnet:
+One command, `npm create scaffold-hbar@latest -- --template superhbar/prediction-market`, gives the developer a working binary prediction market on Hedera testnet:
 
 - Anyone creates a market such as "HBAR/USD ≥ $0.30 at 2026-10-20 12:00 UTC".
 - Traders stake HBAR on YES or NO and receive HTS position tokens.
@@ -35,7 +35,7 @@ The docs explain each Hedera-specific decision, so the developer understands the
 
 1. As a developer, I want to scaffold the template with one `npm create scaffold-hbar` command, so that I can start without cloning or copying files by hand.
 2. As a developer, I want to pick yarn or npm during scaffolding and have both work, so that I can use my preferred package manager.
-3. As a developer, I want a `.env.example` that lists every variable with a description, so that I know exactly what to configure.
+3. As a developer, I want a `.env.example` that lists every variable with a description and marks optional ones (such as `PYTH_API_KEY`), so that I know exactly what to configure.
 4. As a developer, I want a prerequisites list with exact versions (Node, Foundry, testnet account), so that setup does not fail halfway.
 5. As a developer, I want one command that deploys the contracts to testnet and regenerates the frontend contract bindings, so that the UI always matches the deployment.
 6. As a developer, I want the deploy step to fund the contract for scheduled settlement gas, so that the first market I create can settle itself.
@@ -52,7 +52,7 @@ The docs explain each Hedera-specific decision, so the developer understands the
 ### Market creator
 
 16. As a market creator, I want to choose a price feed from a list (HBAR/USD, BTC/USD, ETH/USD), so that I only create markets the oracles can settle.
-17. As a market creator, I want the strike field prefilled with the live price, so that I can set a sensible strike quickly.
+17. As a market creator, I want the strike field prefilled with the live Chainlink price (read on-chain, no API key), so that I can set a sensible strike quickly.
 18. As a market creator, I want to set the expiry with a date and time picker that enforces the allowed minimum and maximum horizon, so that my market can actually be scheduled.
 19. As a market creator, I want to see the exact HBAR cost of creating a market (token creation plus settlement gas reserve) before I sign, so that I am not surprised.
 20. As a market creator, I want creation to fail with a clear message when the network has no schedule capacity at my expiry, so that I can pick another time.
@@ -138,14 +138,15 @@ The docs explain each Hedera-specific decision, so the developer understands the
 
 - Routes:
   - `/`: market list with filters by state.
-  - `/markets/new`: create form, with the live price from Pyth Hermes as the strike default.
+  - `/markets/new`: create form, with the live Chainlink price, read on-chain, as the strike default.
   - `/markets/[id]`: pools, odds, countdowns, stake YES/NO, association prompt, payout quote, schedule status, fallback settle, void, redeem.
   - `/portfolio`: positions across markets.
   - the blank template's debug page.
 - Reads go through the blank template's scaffold hooks. Schedule status and event history come from the mirror node REST API.
+- Pyth is optional and server-side. Since 2026-08-26 Pyth Hermes requires an API key (measured: `401 unauthorized` on every public endpoint). A Next.js API route holds `PYTH_API_KEY` on the server, fetches the Hermes update for the expiry timestamp, and returns the update bytes to the browser. The key never reaches the client. Without a key, the app still runs fully, and the fallback button explains how to enable it. Chainlink settlement and the void path cover liveness without Pyth.
 - Every on-chain entity links to Hashscan: market transaction, tokens, schedule, settlement transaction.
 - Every route renders without a wallet. Wallet hooks are guarded, so prerendering never crashes.
-- Visual design: Tailwind CSS 4 + DaisyUI 5, as in the blank template. A design pass with `/design-shotgun` comes before the page build: three or four directions for the market detail page, the user picks one, and it becomes the theme. Signature elements: a live YES/NO odds bar, a countdown to expiry, a settlement timeline (scheduled, retried, settled) with Hashscan links, and a Pyth price chart with the strike line. Dark and light themes, mobile layout, loading skeletons, clear error states.
+- Visual design: Tailwind CSS 4 + DaisyUI 5, as in the blank template. A design pass with `/design-shotgun` comes before the page build: three or four directions for the market detail page, the user picks one, and it becomes the theme. Signature elements: a live YES/NO odds bar, a countdown to expiry, a settlement timeline (scheduled, retried, settled) with Hashscan links, and a price chart built from on-chain Chainlink rounds, with the strike line. Dark and light themes, mobile layout, loading skeletons, clear error states.
 - Test mode: the blank template's burner wallet can be enabled for testnet behind an env flag that is off by default. Headless browser tests then sign real testnet transactions without MetaMask.
 
 ### Scripts and tooling

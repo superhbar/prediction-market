@@ -57,8 +57,8 @@ Docs + code = 50 points, so execution quality beats idea novelty. ~30+ competito
 - Foundry only. yarn + npm both, both tested from fresh scaffold. No yarn commands in `.tsx`.
 - Wallet: blank template stack (RainbowKit + wagmi + MetaMask + burner). HashPack = README pointer.
 - Testnet default; mainnet addresses labelled unaudited.
-- Repo: personal account for now, name `template-hedera-<usecase>`. Owner string kept in one
-  placeholder so a later move to an org is one find-replace. Final owner fixed BEFORE submission.
+- Repo: `superhbar/prediction-market`. The org exists and the user is admin.
+- Pyth: optional and server-side (`PYTH_API_KEY` in a Next.js API route). Hermes needs a key since 2026-08-26.
 - Versions: latest stable of every dependency, checked at build time, but never break the blank
   template's compatibility (Node >=20.18.3, Yarn 3.2.3, csh v0.4.1 transforms).
 - User timezone: NPT (UTC+5:45). Deadline Sun 23:59 ET = **Mon 09:44 NPT**.
