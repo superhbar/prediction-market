@@ -1,0 +1,29 @@
+name: market-activity-smoke
+server:
+  command: yarn next:dev
+  url: http://localhost:3000
+  timeoutMs: 180000
+defaults:
+  timeoutMs: 60000
+  hydrationTimeoutMs: 60000
+  minBodyTextLength: 40
+  failOnConsoleError: true
+routes:
+  - name: markets
+    path: /
+  - name: market-detail
+    path: /markets/0
+  - name: create
+    path: /markets/new
+  - name: portfolio
+    path: /portfolio
+  - name: debug
+    path: /debug
+  - name: missing-market
+    path: /markets/999999
+forbidden:
+  visibleText:
+    - Application error
+    - Unhandled Runtime Error
+    - Internal Server Error
+    - This page could not be found

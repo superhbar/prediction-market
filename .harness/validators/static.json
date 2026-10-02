@@ -1,0 +1,39 @@
+{
+  "name": "market-activity-static",
+  "description": "Template shape and documentation invariants that must survive the market activity feature.",
+  "jsonAssertions": [
+    { "file": "package.json", "path": "packageManager", "equals": "yarn@3.2.3" },
+    { "file": "package.json", "path": "name", "equals": "prediction-market" },
+    { "file": "template.json", "path": "name", "equals": "prediction-market" }
+  ],
+  "fileAssertions": {
+    "required": [
+      "README.md",
+      "AGENTS.md",
+      "LICENCE",
+      "template.json",
+      "package.json",
+      "packages/nextjs/package.json",
+      "packages/foundry/contracts/PredictionMarkets.sol",
+      "packages/foundry/scripts-js/deployHedera.js",
+      "packages/nextjs/contracts/deployedContracts.ts",
+      "packages/nextjs/utils/markets/mirror.ts",
+      "packages/nextjs/components/markets/ActivityPanel.tsx",
+      ".harness/spec.yaml",
+      ".harness/prds/01-market-activity.md"
+    ],
+    "forbidden": [
+      ".env",
+      "packages/nextjs/.env",
+      "packages/nextjs/.env.local",
+      "packages/foundry/.env",
+      "packages/hardhat"
+    ]
+  },
+  "textAssertions": [
+    { "file": "README.md", "contains": ["yarn foundry:test", "yarn foundry:e2e:testnet", "hedera-harness", "HIP-1215"] },
+    { "file": "AGENTS.md", "contains": ["yarn foundry:test", "tinybar"] },
+    { "file": "packages/nextjs/components/markets/ActivityPanel.tsx", "contains": ["hashscan"] },
+    { "file": "packages/nextjs/utils/markets/mirror.ts", "contains": ["/results/logs", "links"] }
+  ]
+}

@@ -1,0 +1,48 @@
+schemaVersion: 2
+
+name: market-activity
+description: >
+  Add a market activity panel to the market detail page. It reads the
+  PredictionMarkets event logs for one market from the Hedera mirror node
+  (stakes, retries, settlement, voiding, redeems, reserve withdrawal) and
+  links every entry to its Hashscan transaction.
+
+agent: claude
+
+prd: .harness/prds/01-market-activity.md
+
+baseline:
+  commands:
+    - name: install
+      command: yarn install
+    - name: contracts
+      command: yarn foundry:test
+      timeoutMs: 600000
+    - name: build
+      command: yarn next:build
+
+requiredFiles:
+  - packages/nextjs/components/markets/ActivityPanel.tsx
+
+validators:
+  playwright: .harness/validators/playwright-smoke.yaml
+
+contract: .harness/acceptance-contract.json
+validator:
+  enabled: true
+
+# Tier 3.5: the harness funds an ephemeral ECDSA testnet account from your
+# operator and injects it as the burner wallet. The frontend already points at
+# the shipped testnet deployment, so nothing is deployed. Creating a market
+# costs about 33 HBAR (two HTS token creations plus the settlement reserve).
+chainValidation:
+  enabled: true
+  network: testnet
+  operator:
+    accountIdEnv: HEDERA_OPERATOR_ID
+    privateKeyEnv: HEDERA_OPERATOR_KEY
+  fundingHbar: 50
+  sweepBack: true
+  expose:
+    browserLocalStorageKey: burnerWallet.pk
+    envVars: [DEPLOYER_PRIVATE_KEY]

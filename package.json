@@ -41,7 +41,10 @@
     "next:test": "yarn workspace @sh/nextjs test",
     "postinstall": "husky",
     "precommit": "lint-staged",
-    "lint-staged": "lint-staged"
+    "lint-staged": "lint-staged",
+    "harness:doctor": "npx --yes hedera-harness@1.2.2 doctor",
+    "harness:validate": "npx --yes hedera-harness@1.2.2 validate",
+    "harness:run": "npx --yes hedera-harness@1.2.2 run"
   },
   "packageManager": "yarn@3.2.3",
   "devDependencies": {

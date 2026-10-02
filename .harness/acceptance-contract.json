@@ -1,0 +1,57 @@
+{
+  "name": "market-activity",
+  "description": "Graded by the Harness validator against the running app on Hedera testnet. Market 0 on the shipped deployment (0x5863781b36e7beee162152a7d8ab32fe471e105b) is a settled market with known history: stakes of 5 HBAR on YES and 3 HBAR on NO, one scheduled retry, settlement NO via Chainlink, a redeem and a reserve withdrawal.",
+  "assertions": [
+    {
+      "id": "C1",
+      "journey": "Read a market's history without a wallet",
+      "route": "/markets/0",
+      "severity": "critical",
+      "statement": "The market page shows an Activity panel listing market 0's on-chain history, newest first: market created, staked 5 HBAR on YES, staked 3 HBAR on NO, retry booked, settled NO via Chainlink, redeemed, reserve withdrawn.",
+      "howToVerify": "Open /markets/0 with no wallet connected. Find the Activity section below the settlement timeline. Check that the seven entries above are present, that the amounts read 5 HBAR and 3 HBAR (not 0.00000005 or 500000000), and that the first entry is the most recent one. Cross-check against GET https://testnet.mirrornode.hedera.com/api/v1/contracts/0x5863781b36e7beee162152a7d8ab32fe471e105b/results/logs?order=desc&limit=100, keeping logs whose topics[1] is the zero word (market 0).",
+      "walletRequired": false,
+      "verifiableWithoutCredentials": true
+    },
+    {
+      "id": "C2",
+      "journey": "Verify an entry on Hashscan",
+      "route": "/markets/0",
+      "severity": "critical",
+      "statement": "Every activity entry links to its transaction on Hashscan testnet, and the link matches the transaction that emitted the event.",
+      "howToVerify": "On /markets/0, read the href of each 'View on Hashscan' link. Each must start with https://hashscan.io/testnet/transaction/. The link on the settlement entry must carry the same transaction hash as the MarketSettled log returned by the mirror node query in C1.",
+      "walletRequired": false,
+      "verifiableWithoutCredentials": true
+    },
+    {
+      "id": "C3",
+      "journey": "Graceful states",
+      "route": "/markets/0",
+      "severity": "major",
+      "statement": "The panel has a loading state while the mirror node responds and an error state with a Retry button when the request fails; the rest of the page keeps working in both.",
+      "howToVerify": "Reload /markets/0 and observe the panel before data arrives. Then block requests to testnet.mirrornode.hedera.com (or read the component and hook code if the browser cannot block requests) and confirm the panel shows an error message and a Retry button while the headline, odds and settlement timeline still render.",
+      "walletRequired": false,
+      "verifiableWithoutCredentials": true
+    },
+    {
+      "id": "C4",
+      "journey": "Existing app still works",
+      "route": "/",
+      "severity": "critical",
+      "statement": "The market list, create form, portfolio and debug pages still render, and market 0 still shows its resolution strip ('Resolved NO') and settlement timeline.",
+      "howToVerify": "Open /, /markets/new, /portfolio and /debug and confirm each renders without an error overlay. Open /markets/0 and confirm the 'Resolved NO' strip and the 'How this market settles' timeline are present.",
+      "walletRequired": false,
+      "verifiableWithoutCredentials": true
+    },
+    {
+      "id": "C5",
+      "journey": "New activity appears after a real transaction",
+      "route": "/markets/new",
+      "severity": "major",
+      "statement": "After the funded test signer creates a market and stakes on it, the new market's Activity panel lists 'Market created' and the stake, and both Hashscan links point to successful transactions.",
+      "howToVerify": "Using the harness burner wallet, open /markets/new, keep HBAR/USD and the suggested strike, set expiry about 20 minutes ahead, keep the suggested payment and click Create market. Open the new market, stake 1 HBAR on YES. Within one refresh (30 seconds) the Activity panel must show both entries. Confirm both transactions have result SUCCESS on the mirror node (GET /api/v1/contracts/results/{hash}).",
+      "walletRequired": true,
+      "executableWithTestSigner": true,
+      "verifiableWithoutCredentials": false
+    }
+  ]
+}

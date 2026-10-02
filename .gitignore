@@ -38,3 +38,12 @@ spike/broadcast/
 .DS_Store
 .gstack/
 node_modules/
+
+# hedera-harness run state
+.harness/runs/
+.harness/runtime/
+.harness/cache/
+.harness/skills/
+.skill-cache/
+.harness-skills/
+.harness-context/
