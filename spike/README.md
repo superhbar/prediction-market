@@ -1,66 +1,34 @@
-## Foundry
+# Feasibility spike (throwaway)
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+This folder holds the testnet experiments that settle the design questions in `docs/SPEC.md`.
+None of it ships in the template.
 
-Foundry consists of:
+Run on Hedera testnet (chain 296) through `https://testnet.hashio.io/api` on 2026-10-02.
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Results
 
-## Documentation
+| Question | Result | Evidence |
+|---|---|---|
+| Units of `msg.value` inside the EVM | Tinybar. Sending 1 HBAR (1e18 weibar over JSON-RPC) shows up as `100000000` | `stake()` emits `ValueSeen` |
+| Maximum schedule horizon | `hasScheduleCapacity` is true at +62 days and false at +63 days | `capacity()` probe |
+| Gas for `scheduleCall` in a normal transaction | About 1.46M gas. A 600k limit fails with `INSUFFICIENT_GAS` inside `0x16b` | tx `0xec13f9…` (fail), `0xb595d5…` (ok) |
+| Scheduled call runs on time | Yes. It executes as a `CONTRACTCALL` with `scheduled=true`, and the contract pays a 0.022 HBAR fee | mirror node transactions for the spike contract |
+| Token creation from a contract (contract is treasury, supply key and wipe key) | 190k gas plus an 11.45 HBAR fee. Testnet rate: $1 = 9.61 HBAR | `createToken` |
+| Cost of mint and transfer | Mint 44k gas, transfer 43k gas. The first transfer to a new holder costs about 750k gas because of auto-association | `mintOnly`, `transferTo` |
+| Redeem without an approval step | Works. `wipeTokenAccount` called by the contract (as wipe key) removed 40 of a holder's 100 tokens, and total supply dropped to 60 | `wipeFrom` |
+| Chainlink round walk-back | Works. HBAR/USD testnet rounds are 3 to 46 minutes apart | `cast call getRoundData` |
 
-https://book.getfoundry.sh/
+## Implications for the template
 
-## Usage
+- A market costs the creator about 23 HBAR in token fees, plus gas for one schedule booking. Developers need a Hedera Portal account (1000 HBAR a day), not the 10 HBAR a day faucet.
+- The frontend must set an explicit gas limit for the first stake on each token, because of the auto-association cost.
+- Settle on the first oracle round at or after expiry, not the latest round. The feed can be up to 46 minutes stale.
 
-### Build
+## Run it
 
-```shell
-$ forge build
-```
-
-### Test
-
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
+```bash
+cp .env.example .env   # HEDERA_PRIVATE_KEY=0x... (ECDSA, funded testnet account)
+forge install hashgraph/hedera-forking --no-git
+forge build
+forge create src/Spike.sol:Spike --rpc-url https://testnet.hashio.io/api --private-key $HEDERA_PRIVATE_KEY --broadcast --legacy
 ```
