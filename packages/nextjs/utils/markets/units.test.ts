@@ -6,6 +6,7 @@ import {
   hbarToWeibar,
   isPositiveDecimal,
   priceToDecimal,
+  suggestStrike,
   tinybarToHbar,
   tinybarToWeibar,
   yesPercent,
@@ -40,6 +41,12 @@ describe("price conversions", () => {
   it("round-trips 1e18 prices", () => {
     expect(priceToDecimal(300000000000000000n)).toBe("0.3");
     expect(decimalToPrice("0.3")).toBe(300000000000000000n);
+  });
+
+  it("suggests a readable strike for each price range", () => {
+    expect(suggestStrike(99626430000000000n)).toBe("0.0996");
+    expect(suggestStrike(2456789000000000000000n)).toBe("2457");
+    expect(suggestStrike(3456789000000000000n)).toBe("3.46");
   });
 
   it("formats USD prices with 4 decimals", () => {

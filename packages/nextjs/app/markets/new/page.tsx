@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { usePublicClient } from "wagmi";
 import { useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
@@ -15,7 +15,7 @@ import {
   formatPrice,
   hbarToWeibar,
   isPositiveDecimal,
-  priceToDecimal,
+  suggestStrike,
   tinybarToHbar,
 } from "~~/utils/markets/units";
 import { notification } from "~~/utils/scaffold-hbar";
@@ -23,6 +23,14 @@ import { notification } from "~~/utils/scaffold-hbar";
 function toInputValue(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+const subscribeNoop = () => () => {};
+
+/** Default expiry: one hour from now, rounded up to the next 5 minutes. */
+function defaultExpiry(nowMs: number): string {
+  const step = 5 * 60 * 1000;
+  return toInputValue(new Date(Math.ceil((nowMs + 60 * 60 * 1000) / step) * step));
 }
 
 const NewMarketPage = () => {
@@ -34,7 +42,7 @@ const NewMarketPage = () => {
   const [feed, setFeed] = useState<string>(FEED_KEYS[0]);
   const [strike, setStrike] = useState("");
   const [strikeTouched, setStrikeTouched] = useState(false);
-  const [expiryInput, setExpiryInput] = useState("");
+  const [expiryInput, setExpiryInput] = useState<string | null>(null);
   const [valueHbar, setValueHbar] = useState("");
   const [valueTouched, setValueTouched] = useState(false);
 
@@ -46,7 +54,15 @@ const NewMarketPage = () => {
   });
 
   const [nowMs] = useState(() => Date.now());
-  const liveStrike = currentPrice ? priceToDecimal(currentPrice.normalized) : "";
+  // Expiry inputs use the browser's local time zone, so they render only after hydration:
+  // the server's clock and zone would otherwise produce a different value and a hydration error.
+  const mounted = useSyncExternalStore(
+    subscribeNoop,
+    () => true,
+    () => false,
+  );
+  const expiryValue = expiryInput ?? (mounted ? defaultExpiry(nowMs) : "");
+  const liveStrike = currentPrice ? suggestStrike(currentPrice.normalized) : "";
   const strikeValue = strikeTouched ? strike : liveStrike;
   const paymentValue = valueTouched ? valueHbar : suggestedHbar !== "" ? suggestedHbar : valueHbar;
 
@@ -59,9 +75,9 @@ const NewMarketPage = () => {
   }, [config, nowMs]);
 
   const expirySec = useMemo(() => {
-    const time = new Date(expiryInput).getTime();
+    const time = new Date(expiryValue).getTime();
     return Number.isNaN(time) ? null : Math.floor(time / 1000);
-  }, [expiryInput]);
+  }, [expiryValue]);
 
   const expiryError =
     expirySec === null || !bounds
@@ -165,9 +181,9 @@ const NewMarketPage = () => {
             id="expiry"
             type="datetime-local"
             className="input input-bordered w-full"
-            value={expiryInput}
-            min={bounds ? toInputValue(bounds.min) : undefined}
-            max={bounds ? toInputValue(bounds.max) : undefined}
+            value={expiryValue}
+            min={mounted && bounds ? toInputValue(bounds.min) : undefined}
+            max={mounted && bounds ? toInputValue(bounds.max) : undefined}
             onChange={event => setExpiryInput(event.target.value)}
           />
           <p className="text-sm opacity-70 mt-1">
@@ -200,7 +216,10 @@ const NewMarketPage = () => {
           />
           <p className="text-sm opacity-70 mt-1">
             {hbarPerUsd !== undefined ? (
-              <>Covers two token creations at ${hbarPerUsd.toFixed(2)} HBAR per $1 plus reserve. Editable.</>
+              <>
+                Covers two token creations at {hbarPerUsd.toFixed(2)} HBAR per $1, plus the settlement reserve. You can
+                edit it.
+              </>
             ) : (
               "Estimate is loading. You can edit the amount."
             )}

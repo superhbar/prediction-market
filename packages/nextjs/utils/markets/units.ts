@@ -60,6 +60,17 @@ export function priceToDecimal(price: bigint): string {
   return formatUnits(price, PRICE_DECIMALS);
 }
 
+/**
+ * Rounds a 1e18 fixed-point price to a readable default strike: 4 decimals under $1,
+ * 2 decimals under $1,000 and whole dollars above, e.g. 0.09962643 -> "0.0996".
+ */
+export function suggestStrike(price: bigint): string {
+  const one = 10n ** BigInt(PRICE_DECIMALS);
+  const decimals = price < one ? 4 : price < 1000n * one ? 2 : 0;
+  const step = 10n ** BigInt(PRICE_DECIMALS - decimals);
+  return priceToDecimal(((price + step / 2n) / step) * step);
+}
+
 /** 1e18 fixed-point price to a USD string with 4 decimals, e.g. "$0.3000". */
 export function formatPrice(price: bigint): string {
   const value = Number(formatUnits(price, PRICE_DECIMALS));
