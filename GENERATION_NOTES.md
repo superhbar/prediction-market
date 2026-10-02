@@ -1,5 +1,23 @@
 # Generation Notes
 
+## Repair attempt 3 (2026-10-03)
+
+### What failed
+
+Playwright gate reported `ERR_NAME_NOT_RESOLVED` + `Failed to fetch HBAR price: TypeError: Failed to fetch` on all routes (`/`, `/markets/0`, `/markets/new`, `/portfolio`, `/debug`).
+
+`fetchHbarPrice` in `utils/scaffold-hbar/hbarPrice.ts` was fetching `https://mainnet.mirrornode.hedera.com/api/v1/network/exchangerate` directly from the browser. In Playwright's sandboxed environment external DNS resolution fails, so the console error appeared on every page that renders the Footer component.
+
+### What was changed
+
+1. **Created `packages/nextjs/app/api/hbar-price/route.ts`**: New Next.js API route that proxies the mirrornode exchange rate request server-side and returns `{ price: number }`. The server has network access even in test environments; the browser does not need external DNS.
+
+2. **Updated `packages/nextjs/utils/scaffold-hbar/hbarPrice.ts`**: Changed `HBAR_PRICE_URL` from the external mirrornode URL to the local path `/api/hbar-price`. Updated `fetchHbarPrice` to parse the `{ price }` response shape from the new route while keeping `priceFromExchangeRate` as a fallback for backward compatibility with tests.
+
+No changes to any hook, component, or test file. `yarn next:check-types` and all 39 `yarn next:test` tests pass.
+
+
+
 ## Repair attempt 2 (2026-10-03)
 
 ### What failed

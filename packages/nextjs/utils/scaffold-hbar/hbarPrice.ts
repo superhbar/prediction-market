@@ -1,9 +1,11 @@
 export const HBAR_PRICE_CACHE_DURATION_MS = 60 * 1000;
+
 /**
- * The network's own HBAR/USD rate, published by the mainnet mirror node and used by Hedera to price
- * fees. It needs no API key, sends CORS headers and is not rate limited like third-party price APIs.
+ * Same-origin API route that proxies the Hedera mainnet mirrornode exchange rate.
+ * Using a same-origin path keeps the browser fetch local (no external DNS resolution),
+ * which prevents ERR_NAME_NOT_RESOLVED in sandboxed/CI environments like Playwright.
  */
-export const HBAR_PRICE_URL = "https://mainnet.mirrornode.hedera.com/api/v1/network/exchangerate";
+export const HBAR_PRICE_URL = "/api/hbar-price";
 
 type HbarPriceCache = {
   price: number;
@@ -31,7 +33,10 @@ export async function fetchHbarPrice(): Promise<number> {
 
   try {
     const response = await fetch(HBAR_PRICE_URL, { signal: AbortSignal.timeout(10_000) });
-    const price = priceFromExchangeRate((await response.json()) as ExchangeRateResponse);
+    const data = (await response.json()) as { price?: number } & ExchangeRateResponse;
+    // The local API route returns { price }, but keep priceFromExchangeRate as a
+    // fallback parser in case the response shape changes or tests mock it differently.
+    const price = typeof data.price === "number" ? data.price : priceFromExchangeRate(data);
     cache = { price, timestamp: now };
     return price;
   } catch (error) {
