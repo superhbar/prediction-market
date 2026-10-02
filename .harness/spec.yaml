@@ -21,6 +21,19 @@ baseline:
     - name: build
       command: yarn next:build
 
+# The foundry workspace's postinstall copies .env.example to packages/foundry/.env (gitignored,
+# placeholder values only), so the default per-workspace .env check would fail every fresh install.
+# The real secrets live in the root and nextjs env files, and the secret pattern scan still runs.
+forbiddenFiles:
+  - .env
+  - packages/nextjs/.env
+  - packages/nextjs/.env.local
+secretScan:
+  failOnFiles:
+    - .env
+    - packages/nextjs/.env
+    - packages/nextjs/.env.local
+
 requiredFiles:
   - packages/nextjs/components/markets/ActivityPanel.tsx
 
