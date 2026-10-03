@@ -209,6 +209,9 @@ contract PredictionMarkets is ReentrancyGuard {
     event Staked(uint256 indexed marketId, address account, bool yes, uint256 amount);
     /// @notice Emitted when a scheduled settlement finds no round yet and books a retry.
     event SettlementRetryScheduled(uint256 indexed marketId, address schedule, uint256 retryAt, uint8 retriesLeft);
+    /// @notice The last scheduled settlement found no eligible round and could not book another retry.
+    ///         The market stays Open: anyone can settle once a round lands, use Pyth, or void after grace.
+    event SettlementRetriesExhausted(uint256 indexed marketId);
     /// @notice Emitted when a market settles with its outcome, normalized price and source.
     event MarketSettled(uint256 indexed marketId, Outcome outcome, int256 price, uint256 priceTime, PriceSource source);
     /// @notice Emitted when a market is voided after the grace period.
@@ -320,7 +323,8 @@ contract PredictionMarkets is ReentrancyGuard {
 
     /// @notice Settles an expired market on the first Chainlink round at or after expiry.
     /// @dev Callable by the scheduled call or permissionlessly. A scheduled call with no round yet
-    ///      books a retry from the reserve instead of reverting; anyone else reverts NoEligibleRound.
+    ///      books a retry from the reserve, or emits SettlementRetriesExhausted when it cannot, and never
+    ///      reverts; anyone else reverts NoEligibleRound.
     /// @param marketId The market to settle.
     function settle(uint256 marketId) external {
         Market storage m = _getMarket(marketId);
@@ -355,6 +359,13 @@ contract PredictionMarkets is ReentrancyGuard {
                 m.schedulePending = true;
                 // forge-lint: disable-next-line(reentrancy-events)
                 emit SettlementRetryScheduled(marketId, schedule, retryAt, m.retriesLeft);
+                return;
+            }
+            // A scheduled call must not revert here: the revert would undo the reserve charge and the
+            // schedulePending reset while the network still bills the contract for the execution.
+            if (msg.sender == address(this)) {
+                // forge-lint: disable-next-line(reentrancy-events)
+                emit SettlementRetriesExhausted(marketId);
                 return;
             }
             revert NoEligibleRound();

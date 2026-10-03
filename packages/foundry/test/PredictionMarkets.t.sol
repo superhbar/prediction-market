@@ -396,7 +396,7 @@ contract PredictionMarketsTest is Test {
         pm.settle(marketId);
     }
 
-    function test_Settle_RetryExhaustedRevertsForSelfCall() public {
+    function test_Settle_RetryExhaustedSelfCallReturnsAndCharges() public {
         uint256 marketId = _createMarket();
         _stakeBothSides(marketId);
         vm.warp(expiry + 5);
@@ -405,12 +405,34 @@ contract PredictionMarketsTest is Test {
         vm.prank(address(pm));
         pm.settle(marketId);
         assertEq(pm.getMarket(marketId).retriesLeft, 0);
+        uint256 reserveBefore = pm.getMarket(marketId).reserve;
+        uint256 totalBefore = pm.totalReserves();
+
+        vm.expectEmit(true, false, false, false, address(pm));
+        emit PredictionMarkets.SettlementRetriesExhausted(marketId);
         vm.prank(address(pm));
+        pm.settle(marketId);
+
+        PredictionMarkets.Market memory m = pm.getMarket(marketId);
+        assertEq(uint256(m.state), uint256(State.Open));
+        assertFalse(m.schedulePending);
+        assertEq(m.reserve, reserveBefore - pm.SCHEDULED_EXECUTION_COST());
+        assertEq(pm.totalReserves(), totalBefore - pm.SCHEDULED_EXECUTION_COST());
+    }
+
+    function test_Settle_ManualSettleStillRevertsAfterRetriesExhausted() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        vm.warp(expiry + 5);
+        for (uint256 i = 0; i < 3; i++) {
+            vm.prank(address(pm));
+            pm.settle(marketId);
+        }
         vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
         pm.settle(marketId);
     }
 
-    function test_Settle_SelfCallRevertsWhenReserveBelowRetryCost() public {
+    function test_Settle_SelfCallSkipsRetryWhenReserveBelowRetryCost() public {
         Config memory richRetry = Config({
             settlementDelay: 5 minutes,
             retryDelay: 10 minutes,
@@ -437,9 +459,12 @@ contract PredictionMarketsTest is Test {
         // forge-lint: disable-next-line(arbitrary-send-eth)
         expensive.stake{ value: 4e8 }(marketId, false);
         vm.warp(expiry + 5);
+        vm.expectEmit(true, false, false, false, address(expensive));
+        emit PredictionMarkets.SettlementRetriesExhausted(marketId);
         vm.prank(address(expensive));
-        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
         expensive.settle(marketId);
+        assertEq(expensive.getMarket(marketId).retriesLeft, 2);
+        assertFalse(expensive.getMarket(marketId).schedulePending);
     }
 
     function test_Settle_RefusesUnprovenRoundAtPhaseBoundary() public {
