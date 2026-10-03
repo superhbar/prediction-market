@@ -9,6 +9,7 @@ import { RedeemPanel } from "~~/components/markets/RedeemPanel";
 import { SettlementTimeline } from "~~/components/markets/SettlementTimeline";
 import { StakePanel } from "~~/components/markets/StakePanel";
 import { ErrorState, MarketDetailSkeleton } from "~~/components/markets/States";
+import { TradePanel } from "~~/components/markets/TradePanel";
 import { AssetBadge, StatusPill } from "~~/components/markets/ui";
 import { useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarket } from "~~/hooks/markets/useMarket";
@@ -127,6 +128,7 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
         <div className="lg:col-span-4 order-first lg:order-none">
           <div className="lg:sticky lg:top-24 flex flex-col gap-4">
             <StakePanel marketId={Number(id)} market={market} initialSide={initialSide} />
+            <TradePanel market={market} />
             <RedeemPanel marketId={Number(id)} market={market} />
           </div>
         </div>
