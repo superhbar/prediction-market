@@ -11,7 +11,7 @@ yarn foundry:account:generate
 yarn foundry:account:import
 yarn foundry:deploy --network hedera_testnet --keystore <name>
 DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet   # full lifecycle on testnet, 17 min to 2 h; --market <id> resumes
-yarn foundry:test          # 104 forge unit tests, HTS/HSS mocked
+yarn foundry:test          # 104 forge unit tests + 5 invariants, HTS/HSS mocked
 yarn next:test             # vitest: units, feeds, status, hashscan, activity, HBAR price
 yarn next:lint && yarn next:check-types && yarn next:build
 yarn lint                  # next:lint + foundry:lint
@@ -28,7 +28,7 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 - `packages/foundry/script/Deploy.s.sol`: localhost deploy. Hedera deploys go through `scripts-js/deployHedera.js`.
 - `packages/foundry/scripts-js/deployHedera.js`: `cast send --create` deploy, writes `broadcast/` + `deployments/`, then regenerates bindings.
 - `packages/foundry/scripts-js/e2eTestnet.js`: create, stake both sides, wait for scheduled settle, redeem, withdraw reserve.
-- `packages/foundry/test/`: `PredictionMarkets.t.sol`, `PriceMath.t.sol`, `HelperConfig.t.sol`, `mocks/` (etched at `0x167`/`0x16b`).
+- `packages/foundry/test/`: `PredictionMarkets.t.sol`, `PredictionMarkets.invariant.t.sol` (random multi-market sequences; extend its handler when adding an action), `PriceMath.t.sol`, `HelperConfig.t.sol`, `mocks/` (etched at `0x167`/`0x16b`).
 - `packages/nextjs/app/`: `page.tsx` (list), `markets/new`, `markets/[id]`, `portfolio`, `api/pyth/route.ts` (server-only Hermes proxy), `api/markets` and `llms.txt` (read-only JSON and agent guide; shape in `utils/markets/marketJson.ts`).
 - `packages/nextjs/components/markets/`: MarketCard, StakePanel, TradePanel (SaucerSwap), RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, `ui.tsx` (AssetBadge, StatusPill, OutcomeBar).
 - `packages/nextjs/styles/globals.css`: both daisyUI themes (`hedera` dark default, `hedera-light`) and `--color-yes`/`--color-no`. `utils/brand.ts`: app name and the hex colors CSS cannot reach.
@@ -50,7 +50,7 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 - `totalPoolLiability` (owed to traders) and `totalReserves` (sum of market reserves) are updated on every stake, redeem, reserve charge, and withdrawal. `withdrawReserve` pays at most balance surplus beyond both; underestimates land on the creator.
 - Tinybar inside the contract, always. No rescaling in Solidity; conversion lives only in `utils/markets/units.ts`.
 - Frontend uses explicit gas limits from `units.ts` GAS (createMarket 3M, stake 1.5M, settle/settleWithPyth 1M, redeem 800k, void/withdraw 300k). Do not rely on estimation.
-- Redeem amounts in the UI come from `quotePayout` as-is (it returns 0 until settlement). The only payout math in TS is `projectedPayout` in `utils/markets/units.ts`, the pre-stake "pays if this side wins" estimate; it must stay the same formula as `quotePayout` and stay labelled as an estimate.
+- Redeem amounts in the UI come from `quotePayout` as-is (it returns 0 until settlement). The only payout math in TS lives in `utils/markets/units.ts`: `projectedPayout` (pre-stake estimate), `payoutMultipleBps` (what a winning token pays) and `impliedChanceBps` (SaucerSwap price over that multiple). All three must stay the same formula as `quotePayout`, are display only, and stay labelled as estimates before expiry.
 
 ## Hedera gotchas
 

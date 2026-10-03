@@ -53,6 +53,42 @@ export function spotPrice(reserves: PoolReserves): bigint | undefined {
   return (reserves.hbar * 100_000_000n) / reserves.token;
 }
 
+/**
+ * Output of a SaucerSwap V1 swap against one pool: the Uniswap V2 constant-product formula with its 0.3% fee.
+ * Display only (the depth ladder); swaps themselves use the router's getAmountsOut quote.
+ */
+export function amountOut(amountIn: bigint, reserveIn: bigint, reserveOut: bigint): bigint {
+  if (amountIn <= 0n || reserveIn <= 0n || reserveOut <= 0n) return 0n;
+  const inWithFee = amountIn * 997n;
+  return (inWithFee * reserveOut) / (reserveIn * 1000n + inWithFee);
+}
+
+/** One rung of the depth ladder: what a trade of `size` gets, its average price and its distance from spot. */
+export type DepthRung = { size: bigint; received: bigint; averagePrice: bigint; impactBps: bigint };
+
+/**
+ * Order-book style depth for a pool: buys spend `sizes` in tinybar, sells sell `sizes` in token base units.
+ * Prices are tinybar per whole token; impact is how far the average fill sits from the spot price.
+ */
+export function poolDepth(reserves: PoolReserves, sizes: readonly bigint[]): { buys: DepthRung[]; sells: DepthRung[] } {
+  const spot = spotPrice(reserves);
+  const rung = (size: bigint, received: bigint, averagePrice: bigint): DepthRung => ({
+    size,
+    received,
+    averagePrice,
+    impactBps: spot ? ((averagePrice > spot ? averagePrice - spot : spot - averagePrice) * 10_000n) / spot : 0n,
+  });
+  const buys = sizes.map(size => {
+    const tokens = amountOut(size, reserves.hbar, reserves.token);
+    return rung(size, tokens, tokens > 0n ? (size * 100_000_000n) / tokens : 0n);
+  });
+  const sells = sizes.map(size => {
+    const hbar = amountOut(size, reserves.token, reserves.hbar);
+    return rung(size, hbar, (hbar * 100_000_000n) / size);
+  });
+  return { buys, sells };
+}
+
 /** Minimum acceptable output for a quote, e.g. 1% slippage keeps 99% of the quoted amount. */
 export function minimumOut(quoted: bigint, slippageBps: bigint = DEFAULT_SLIPPAGE_BPS): bigint {
   if (quoted <= 0n) return 0n;

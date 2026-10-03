@@ -1,3 +1,5 @@
+import { hedera } from "viem/chains";
+
 /**
  * Typed mirror node REST fetchers. All calls are plain GET requests with a
  * timeout; they never need a wallet or an API key.
@@ -91,15 +93,18 @@ export async function fetchAccount(mirrorBase: string, evmAddress: string): Prom
 
 /**
  * Whether an EVM address has a Hedera account yet. A fresh burner or wallet address only becomes an account
- * when it first receives HBAR; until then the mirror node answers 404 and HTS balance reads revert.
+ * when it first receives HBAR; until then the mirror node answers 404 and HTS balance reads revert. Asks the
+ * app's own `/api/hedera/account` route, which turns that 404 into `{ accountId: null }`, so a missing account
+ * never shows up as a failed request in the browser console.
  */
-export async function fetchAccountExists(mirrorBase: string, evmAddress: string): Promise<boolean> {
-  const response = await fetch(`${mirrorBase}/api/v1/accounts/${evmAddress}`, {
+export async function fetchAccountExists(chainId: number, evmAddress: string): Promise<boolean> {
+  const network = chainId === hedera.id ? "mainnet" : "testnet";
+  const response = await fetch(`/api/hedera/account?evm=${evmAddress}&network=${network}`, {
     signal: AbortSignal.timeout(10_000),
   });
-  if (response.status === 404) return false;
-  if (!response.ok) throw new Error(`Mirror node request failed: ${response.status}`);
-  return true;
+  if (!response.ok) throw new Error(`Account lookup failed: ${response.status}`);
+  const data = (await response.json()) as { accountId?: string | null };
+  return typeof data.accountId === "string";
 }
 
 /** True when the account already holds or is associated with the token. */

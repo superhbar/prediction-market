@@ -6,7 +6,7 @@ import { useAccount, useWriteContract } from "wagmi";
 import { associateAbi } from "~~/hooks/markets/abis";
 import { useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-hbar";
 import { longZeroToEntityId, mirrorBaseForChain } from "~~/utils/markets/hashscan";
-import { fetchAccount, fetchIsTokenAssociated } from "~~/utils/markets/mirror";
+import { fetchAccount, fetchAccountExists, fetchIsTokenAssociated } from "~~/utils/markets/mirror";
 import { isRefund } from "~~/utils/markets/status";
 import { type Market, MarketState } from "~~/utils/markets/types";
 import {
@@ -65,13 +65,18 @@ export function StakePanel({ marketId, market, initialSide = "YES" }: StakePanel
     let cancelled = false;
     const mirror = mirrorBaseForChain(targetNetwork.id);
     const accountAddress = account;
-    Promise.all([fetchAccount(mirror, accountAddress), fetchIsTokenAssociated(mirror, accountAddress, tokenId)])
-      .then(([info, associated]) => {
+    // An address with no Hedera account yet gets one with unlimited automatic associations when it is first
+    // funded, so there is nothing to associate, and its mirror lookups would only 404.
+    fetchAccountExists(targetNetwork.id, accountAddress)
+      .then(exists =>
+        exists
+          ? Promise.all([fetchAccount(mirror, accountAddress), fetchIsTokenAssociated(mirror, accountAddress, tokenId)])
+          : null,
+      )
+      .then(result => {
         if (cancelled) return;
-        setAssocSnapshot({
-          key: assocKey,
-          value: info.maxAutomaticTokenAssociations === 0 && !associated ? "needs-association" : "ok",
-        });
+        const needsAssociation = result !== null && result[0].maxAutomaticTokenAssociations === 0 && !result[1];
+        setAssocSnapshot({ key: assocKey, value: needsAssociation ? "needs-association" : "ok" });
       })
       .catch(() => {
         if (!cancelled) setAssocSnapshot({ key: assocKey, value: "unknown" });
@@ -120,13 +125,13 @@ export function StakePanel({ marketId, market, initialSide = "YES" }: StakePanel
   if (!tradingOpen) {
     return (
       <div className="panel p-5">
-        <p className="text-sm font-semibold text-base-content/70 m-0">Trading closed</p>
+        <p className="text-sm font-semibold text-base-content/70 m-0">Staking closed</p>
         <p className="text-base font-medium leading-snug mt-2 mb-0">
           {isRefund(market)
             ? "Every position in this market redeems 1:1 for the HBAR staked."
             : market.state === MarketState.Settled
               ? "This market is resolved. Winning tokens redeem for a share of the whole pool."
-              : "Expiry has passed. The scheduled settlement reads the first oracle price at or after expiry."}
+              : "Waiting for the oracle. The first Chainlink price published after expiry decides the outcome, and the market settles itself when it arrives. Until then YES and NO tokens can still change hands on SaucerSwap."}
         </p>
         <p className="text-sm text-base-content/60 mt-3 mb-0">
           {formatHbar(market.yesPool + market.noPool)} pooled: {formatHbar(market.yesPool)} on YES,{" "}

@@ -1,4 +1,4 @@
-import { minimumOut, orientReserves, spotPrice } from "./saucerswap";
+import { amountOut, minimumOut, orientReserves, poolDepth, spotPrice } from "./saucerswap";
 import { describe, expect, it } from "vitest";
 
 const WHBAR = "0x0000000000000000000000000000000000003ad2";
@@ -33,5 +33,35 @@ describe("minimumOut", () => {
   it("accepts a custom slippage and never goes below zero", () => {
     expect(minimumOut(10_000n, 50n)).toBe(9_950n);
     expect(minimumOut(0n)).toBe(0n);
+  });
+});
+
+describe("amountOut", () => {
+  it("matches the e2e buy on testnet to the unit", () => {
+    // Pool opened with 2 YES and 1 HBAR plus 3% of the 19.66297658 HBAR fee; 0.5 HBAR bought 0.47740141 YES.
+    expect(amountOut(50_000_000n, 158_988_930n, 200_000_000n)).toBe(47_740_141n);
+  });
+
+  it("is zero for an empty input or pool", () => {
+    expect(amountOut(0n, 1n, 1n)).toBe(0n);
+    expect(amountOut(1n, 0n, 1n)).toBe(0n);
+  });
+});
+
+describe("poolDepth", () => {
+  const reserves = { hbar: 100_000_000_000n, token: 200_000_000_000n }; // 1000 HBAR, 2000 tokens, spot 0.5 HBAR
+
+  it("fills larger trades at worse average prices on both sides", () => {
+    const { buys, sells } = poolDepth(reserves, [100_000_000n, 10_000_000_000n]);
+    expect(buys[0].averagePrice).toBeGreaterThan(50_000_000n);
+    expect(buys[1].averagePrice).toBeGreaterThan(buys[0].averagePrice);
+    expect(sells[0].averagePrice).toBeLessThan(50_000_000n);
+    expect(sells[1].averagePrice).toBeLessThan(sells[0].averagePrice);
+    expect(buys[1].impactBps).toBeGreaterThan(buys[0].impactBps);
+  });
+
+  it("charges about the 0.3% fee on a tiny buy", () => {
+    const [tiny] = poolDepth(reserves, [100_000n]).buys;
+    expect(tiny.impactBps).toBe(30n);
   });
 });

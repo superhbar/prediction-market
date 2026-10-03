@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Address } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
+import { useNow } from "~~/hooks/markets/useNow";
 import { useSaucerPool } from "~~/hooks/markets/useSaucerPool";
 import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-hbar";
 import { hashscanLink } from "~~/utils/markets/hashscan";
@@ -13,11 +14,21 @@ import {
   erc20ApproveAbi,
   exchangeRateAbi,
   minimumOut,
+  poolDepth,
   saucerFactoryAbi,
   saucerRouterAbi,
 } from "~~/utils/markets/saucerswap";
 import { type Market, MarketState } from "~~/utils/markets/types";
-import { GAS, formatHbar, hbarToTinybar, isPositiveDecimal, tinybarToWeibar } from "~~/utils/markets/units";
+import {
+  GAS,
+  formatHbar,
+  formatMultiple,
+  hbarToTinybar,
+  impliedChanceBps,
+  isPositiveDecimal,
+  payoutMultipleBps,
+  tinybarToWeibar,
+} from "~~/utils/markets/units";
 
 type Side = "YES" | "NO";
 type Mode = "buy" | "sell";
@@ -35,6 +46,7 @@ export function TradePanel({ market }: { market: Market }) {
   const [side, setSide] = useState<Side>("YES");
   const token = side === "YES" ? market.yesToken : market.noToken;
   const pool = useSaucerPool(token);
+  const nowSec = useNow();
 
   if (!deployment || market.state !== MarketState.Open) return null;
 
@@ -78,6 +90,9 @@ export function TradePanel({ market }: { market: Market }) {
           token={token}
           price={pool.price}
           reserves={pool.reserves}
+          sidePool={side === "YES" ? market.yesPool : market.noPool}
+          otherPool={side === "YES" ? market.noPool : market.yesPool}
+          expired={nowSec >= market.expiry}
           router={deployment.router}
           whbarToken={deployment.whbarToken}
           onDone={pool.refetch}
@@ -100,12 +115,27 @@ type SwapFormProps = {
   token: Address;
   price: bigint | undefined;
   reserves: { hbar: bigint; token: bigint };
+  sidePool: bigint;
+  otherPool: bigint;
+  /** Pools are final after expiry, so the payout and the implied chance stop being estimates. */
+  expired: boolean;
   router: Address;
   whbarToken: Address;
   onDone: () => void;
 };
 
-function SwapForm({ side, token, price, reserves, router, whbarToken, onDone }: SwapFormProps) {
+function SwapForm({
+  side,
+  token,
+  price,
+  reserves,
+  sidePool,
+  otherPool,
+  expired,
+  router,
+  whbarToken,
+  onDone,
+}: SwapFormProps) {
   const { address: account } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const [mode, setMode] = useState<Mode>("buy");
@@ -183,7 +213,8 @@ function SwapForm({ side, token, price, reserves, router, whbarToken, onDone }: 
 
   return (
     <div className="mt-4">
-      <p className="m-0 text-sm text-base-content/70">
+      <ImpliedChance side={side} price={price} sidePool={sidePool} otherPool={otherPool} expired={expired} />
+      <p className="m-0 mt-3 text-sm text-base-content/70">
         1 {side} ≈{" "}
         <span className="font-semibold text-base-content tabular-nums">{price ? formatHbar(price) : "-"}</span>
         <span className="text-base-content/50">
@@ -241,11 +272,91 @@ function SwapForm({ side, token, price, reserves, router, whbarToken, onDone }: 
               ? `Approve and sell ${amountValid ? amount : "-"} ${side}`
               : `Sell ${amountValid ? amount : "-"} ${side}`}
       </button>
+      <PoolDepth side={side} reserves={reserves} />
       <p className="text-xs text-base-content/50 mt-3 mb-0">
-        Trades fill against the SaucerSwap pool, not the market&apos;s stake pools. Whoever holds a position token at
-        settlement redeems it.
+        Trades fill against the SaucerSwap pool, not the market&apos;s stake pools, and keep running after staking
+        closes. Whoever holds a position token at settlement redeems it.
       </p>
     </div>
+  );
+}
+
+type ImpliedChanceProps = {
+  side: Side;
+  price: bigint | undefined;
+  sidePool: bigint;
+  otherPool: bigint;
+  expired: boolean;
+};
+
+/**
+ * The chance the pool price implies: what a token costs on SaucerSwap over what it pays if its side wins.
+ * Display only, read from pools; redeem amounts still come from quotePayout.
+ */
+function ImpliedChance({ side, price, sidePool, otherPool, expired }: ImpliedChanceProps) {
+  const multiple = payoutMultipleBps(sidePool, otherPool);
+  const chance = price !== undefined ? impliedChanceBps(price, sidePool, otherPool) : undefined;
+  if (multiple === undefined || chance === undefined) return null;
+  const percent = Number(chance) / 100;
+  return (
+    <div className="rounded-[10px] border border-base-300 bg-base-200 px-3 py-2.5">
+      <p className="m-0 text-xs text-base-content/60">Traders price {side} at</p>
+      <p className={`m-0 text-2xl font-bold tabular-nums ${side === "YES" ? "text-yes" : "text-no"}`}>
+        {percent > 100 ? ">100" : percent.toFixed(0)}% chance
+      </p>
+      <p className="m-0 mt-1 text-xs text-base-content/60">
+        1 {side} costs {price !== undefined ? formatHbar(price) : "-"} and pays{" "}
+        {formatMultiple(multiple).replace("x", "")} HBAR if {side} wins
+        {expired ? "" : " (estimate: stakes can still change the payout until expiry)"}.
+      </p>
+    </div>
+  );
+}
+
+const DEPTH_SIZES = [100_000_000n, 1_000_000_000n, 5_000_000_000n];
+
+/**
+ * An order-book style view of the pool: the average price a buy or sell of each size would fill at, and how far
+ * that is from the current price. SaucerSwap is an AMM, so this is the curve, not resting orders.
+ */
+function PoolDepth({ side, reserves }: { side: Side; reserves: { hbar: bigint; token: bigint } }) {
+  const { buys, sells } = poolDepth(reserves, DEPTH_SIZES);
+  const impact = (bps: bigint) => `${(Number(bps) / 100).toFixed(1)}%`;
+  return (
+    <details className="mt-4 group">
+      <summary className="cursor-pointer text-sm font-semibold text-base-content/70">Pool depth</summary>
+      <table className="mt-2 w-full text-xs tabular-nums">
+        <thead className="text-base-content/50">
+          <tr>
+            <th className="text-left font-medium pb-1">Size</th>
+            <th className="text-right font-medium pb-1">Buy avg</th>
+            <th className="text-right font-medium pb-1">Sell avg</th>
+          </tr>
+        </thead>
+        <tbody>
+          {DEPTH_SIZES.map((size, index) => (
+            <tr key={size.toString()}>
+              <td className="py-0.5">{formatHbar(size).replace(" HBAR", "")}</td>
+              <td className="py-0.5 text-right text-yes">
+                {buys[index].received > 0n
+                  ? `${formatHbar(buys[index].averagePrice)} (+${impact(buys[index].impactBps)})`
+                  : "-"}
+              </td>
+              <td className="py-0.5 text-right text-no">
+                {sells[index].received > 0n
+                  ? `${formatHbar(sells[index].averagePrice)} (-${impact(sells[index].impactBps)})`
+                  : "-"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="m-0 mt-2 text-xs text-base-content/50">
+        Buys spend that many HBAR, sells sell that many {side}. Prices are HBAR per {side}, from the pool&apos;s
+        constant-product curve with SaucerSwap&apos;s 0.3% fee. SaucerSwap is an AMM, so there are no resting orders:
+        bigger trades move further along the curve.
+      </p>
+    </details>
   );
 }
 

@@ -2,10 +2,13 @@ import {
   decimalToPrice,
   formatExactPrice,
   formatHbar,
+  formatMultiple,
   formatPrice,
   hbarToTinybar,
   hbarToWeibar,
+  impliedChanceBps,
   isPositiveDecimal,
+  payoutMultipleBps,
   priceToDecimal,
   projectedPayout,
   suggestStrike,
@@ -87,5 +90,27 @@ describe("input validation", () => {
     expect(isPositiveDecimal("0")).toBe(false);
     expect(isPositiveDecimal("abc")).toBe(false);
     expect(isPositiveDecimal("")).toBe(false);
+  });
+});
+
+describe("impliedChanceBps", () => {
+  it("reads market 9's pool price against its 1.6x payout as about 49%", () => {
+    // 1 YES at 0.7784 HBAR; YES pays 8 / 5 = 1.6 HBAR if it wins.
+    expect(impliedChanceBps(77_840_000n, 500_000_000n, 300_000_000n)).toBe(4865n);
+  });
+
+  it("is undefined when nobody has staked on that side", () => {
+    expect(impliedChanceBps(50_000_000n, 0n, 300_000_000n)).toBeUndefined();
+  });
+});
+
+describe("payoutMultipleBps", () => {
+  it("pays 1.6x on the YES side of a 5 to 3 HBAR market and 2.67x on NO", () => {
+    expect(payoutMultipleBps(500_000_000n, 300_000_000n)).toBe(16_000n);
+    expect(formatMultiple(payoutMultipleBps(300_000_000n, 500_000_000n)!)).toBe("2.67x");
+  });
+
+  it("is undefined while a side has no stake", () => {
+    expect(payoutMultipleBps(0n, 300_000_000n)).toBeUndefined();
   });
 });

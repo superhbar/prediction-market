@@ -114,6 +114,30 @@ export function projectedPayout(stake: bigint, sidePool: bigint, otherPool: bigi
   return (stake * (sidePool + otherPool + stake)) / (sidePool + stake);
 }
 
+/**
+ * What one token of a side pays if that side wins, as a multiple of 1 HBAR in basis points (16000 = 1.6x):
+ * (yesPool + noPool) / sidePool, the same formula as quotePayout. Undefined while the side has no stake.
+ */
+export function payoutMultipleBps(sidePool: bigint, otherPool: bigint): bigint | undefined {
+  if (sidePool <= 0n) return undefined;
+  return ((sidePool + otherPool) * 10_000n) / sidePool;
+}
+
+/** "1.60x" from a basis-point multiple. */
+export function formatMultiple(bps: bigint): string {
+  return `${(Number(bps) / 10_000).toFixed(2)}x`;
+}
+
+/**
+ * The chance a token's market price implies, in basis points: its price over what it pays if its side wins.
+ * A winning token pays (yesPool + noPool) / sidePool, the same formula as quotePayout. Display only, and an
+ * estimate until expiry because later stakes change the pools. Undefined while the side has no stake.
+ */
+export function impliedChanceBps(priceTinybar: bigint, sidePool: bigint, otherPool: bigint): bigint | undefined {
+  if (sidePool <= 0n) return undefined;
+  return (priceTinybar * sidePool * 10_000n) / (100_000_000n * (sidePool + otherPool));
+}
+
 /** Human decimal price string to 1e18 fixed point for createMarket strike. */
 export function decimalToPrice(decimal: string): bigint {
   return parseUnits(decimal.trim() === "" ? "0" : decimal.trim(), PRICE_DECIMALS);

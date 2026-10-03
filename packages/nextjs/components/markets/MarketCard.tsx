@@ -6,7 +6,7 @@ import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
 import { type MarketFilter, isRefund, resolutionLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
 import type { Market, UiStatus } from "~~/utils/markets/types";
-import { formatExactPrice, formatHbar, yesPercent } from "~~/utils/markets/units";
+import { formatExactPrice, formatHbar, formatMultiple, payoutMultipleBps, yesPercent } from "~~/utils/markets/units";
 
 type MarketCardProps = {
   marketId: number;
@@ -15,6 +15,12 @@ type MarketCardProps = {
   /** Recent Chainlink rounds for this market's feed, drawn as a sparkline. */
   points?: PricePoint[];
 };
+
+/** "1.60x" if that side wins, or a dash while nobody has staked on it. */
+function multipleLabel(sidePool: bigint, otherPool: bigint): string {
+  const multiple = payoutMultipleBps(sidePool, otherPool);
+  return multiple ? formatMultiple(multiple) : "-";
+}
 
 /** What a closed market is waiting for, or how it ended. */
 function closedNote(market: Market, status: UiStatus): { tone: "warning" | "neutral"; text: string } {
@@ -36,11 +42,10 @@ function closedNote(market: Market, status: UiStatus): { tone: "warning" | "neut
   }
 }
 
-/** Market summary for the list grid: question, pool share, stake buttons and timing. */
+/** Market summary for the list grid: question, what each side pays, stake buttons and timing. */
 export function MarketCard({ marketId, market, status, points = [] }: MarketCardProps) {
   const feedLabel = bytes32ToFeedKey(market.feedKey);
   const yes = yesPercent(market.yesPool, market.noPool);
-  const yesRounded = Math.round(yes);
   const href = `/markets/${marketId}`;
   const note = status === "open" ? undefined : closedNote(market, status);
 
@@ -61,12 +66,16 @@ export function MarketCard({ marketId, market, status, points = [] }: MarketCard
       </h2>
 
       <div className="flex items-end justify-between gap-3 mt-auto">
-        <p className="m-0 flex items-baseline gap-1.5">
-          <span className={`text-3xl font-bold tabular-nums ${yesRounded >= 50 ? "text-yes" : "text-no"}`}>
-            {yesRounded}%
-          </span>
-          <span className="text-sm text-base-content/60">of pool on Yes</span>
-        </p>
+        <dl className="m-0 grid grid-cols-2 gap-x-4 text-sm">
+          <dt className="text-base-content/60">Yes pays</dt>
+          <dt className="text-base-content/60">No pays</dt>
+          <dd className="m-0 text-2xl font-bold tabular-nums text-yes">
+            {multipleLabel(market.yesPool, market.noPool)}
+          </dd>
+          <dd className="m-0 text-2xl font-bold tabular-nums text-no">
+            {multipleLabel(market.noPool, market.yesPool)}
+          </dd>
+        </dl>
         <Sparkline points={points} />
       </div>
       <OutcomeBar yes={yes} />

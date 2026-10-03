@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Address } from "viem";
 import { useTargetNetwork } from "~~/hooks/scaffold-hbar";
-import { mirrorBaseForChain } from "~~/utils/markets/hashscan";
 import { fetchAccountExists } from "~~/utils/markets/mirror";
 
 /**
@@ -15,7 +14,7 @@ export function useAccountExists(address: Address | undefined): boolean | undefi
   const { data } = useQuery({
     queryKey: ["accountExists", targetNetwork.id, address],
     enabled: !!address,
-    queryFn: () => fetchAccountExists(mirrorBaseForChain(targetNetwork.id), address!),
+    queryFn: () => fetchAccountExists(targetNetwork.id, address!),
     refetchInterval: query => (query.state.data === false ? 15_000 : false),
   });
   return address ? data : undefined;
