@@ -9,7 +9,7 @@ import { PriceChart } from "~~/components/markets/PriceChart";
 import { RedeemPanel } from "~~/components/markets/RedeemPanel";
 import { SettlementTimeline } from "~~/components/markets/SettlementTimeline";
 import { StakePanel } from "~~/components/markets/StakePanel";
-import { MarketDetailSkeleton } from "~~/components/markets/States";
+import { ErrorState, MarketDetailSkeleton } from "~~/components/markets/States";
 import { AssetBadge, StatusPill } from "~~/components/markets/ui";
 import { useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarket } from "~~/hooks/markets/useMarket";
@@ -22,7 +22,7 @@ import { formatExactPrice } from "~~/utils/markets/units";
 
 /** Market detail: headline, odds, chart, stake, settlement timeline, activity and redeem. */
 export function MarketDetail({ id }: { id: string }) {
-  const { market, invalid, notFound, isLoading } = useMarket(id);
+  const { market, invalid, notFound, isLoading, error, refetch } = useMarket(id);
   const { config } = useMarketConfig();
   const feedLabel = market ? bytes32ToFeedKey(market.feedKey) : "HBAR/USD";
   const { points, isLoading: chartLoading } = useChainlinkHistory(feedLabel);
@@ -32,6 +32,17 @@ export function MarketDetail({ id }: { id: string }) {
     return (
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-16">
         <MarketDetailSkeleton />
+      </div>
+    );
+  }
+
+  if (error && !market) {
+    return (
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-16 mt-10">
+        <ErrorState
+          message="The market could not be read from the network. Check the RPC and retry."
+          onRetry={refetch}
+        />
       </div>
     );
   }

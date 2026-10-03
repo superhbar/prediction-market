@@ -21,7 +21,7 @@ export function useMarkets(): {
   const { data: deployed } = useDeployedContractInfo({ contractName: "PredictionMarkets" });
   const {
     data: count,
-    isLoading: countLoading,
+    isPending: countPending,
     error: countError,
   } = useScaffoldReadContract({ contractName: "PredictionMarkets", functionName: "marketCount" });
 
@@ -42,11 +42,10 @@ export function useMarkets(): {
     }));
   }, [deployed, marketIds, targetNetwork.id]);
 
-  const {
-    data: results,
-    isLoading: marketsLoading,
-    error: marketsError,
-  } = useReadContracts({ contracts, query: { enabled: contracts.length > 0 } });
+  const { data: results, error: marketsError } = useReadContracts({
+    contracts,
+    query: { enabled: contracts.length > 0 },
+  });
 
   const markets = useMemo<(Market | null)[]>(() => {
     if (marketIds.length === 0) return [];
@@ -65,7 +64,9 @@ export function useMarkets(): {
     marketIds,
     markets,
     count: count === undefined ? undefined : Number(count),
-    isLoading: countLoading || (marketIds.length > 0 && marketsLoading && !results),
+    // isPending, not isLoading: the count read stays disabled until the contract address resolves, and a
+    // disabled query is not "loading", which would flash the empty state before the first fetch.
+    isLoading: (countPending && !countError) || (marketIds.length > 0 && !results && !marketsError),
     error: ((countError ?? marketsError) as Error | null) ?? null,
   };
 }
