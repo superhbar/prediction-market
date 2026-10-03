@@ -1,7 +1,8 @@
+# Runs on 20960 rather than 3000, which is often taken on a dev machine. PORT overrides it.
 name: market-activity-smoke
 server:
-  command: yarn next:dev
-  url: http://localhost:3000
+  command: node .harness/validators/command.cjs next:dev
+  url: http://localhost:20960
   timeoutMs: 180000
 defaults:
   timeoutMs: 60000
