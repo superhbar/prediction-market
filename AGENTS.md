@@ -11,7 +11,7 @@ yarn foundry:account:generate
 yarn foundry:account:import
 yarn foundry:deploy --network hedera_testnet --keystore <name>
 DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet   # full lifecycle on testnet, 17 min to 2 h; --market <id> resumes
-yarn foundry:test          # 104 forge unit tests + 5 invariants, HTS/HSS mocked
+yarn foundry:test          # 111 forge unit tests + 5 invariants, HTS/HSS mocked
 yarn next:test             # vitest: units, feeds, status, hashscan, activity, HBAR price
 yarn next:lint && yarn next:check-types && yarn next:build
 yarn lint                  # next:lint + foundry:lint
@@ -44,6 +44,7 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 - A Chainlink round settles a market only when PROVEN first: the walk reaches an earlier same-phase round published before expiry. Any other walk exit (48-step bound, phase boundary, first round of a phase, missing round) means no eligible round. Never relax this to "best candidate".
 - `chainlinkSettlementRound(marketId)` is the single definition of an eligible Chainlink round (proof rule plus `maxRoundLag`), shared by `settle`, `settleWithPyth` precedence and the UI's Settle button. Never re-derive eligibility from chart data.
 - Chainlink has precedence: `settleWithPyth` only after `expiry + maxRoundLag` and only when no provably first Chainlink round exists (`ChainlinkRoundAvailable` otherwise). `settleWithPyth` uses `minPublishTime = expiry`.
+- Every schedule booking goes through `_book`: it probes `hasScheduleCapacity` for up to 8 consecutive seconds and counts only SUCCESS with a nonzero schedule address. Creation reverts on failure; a scheduled retry emits `SettlementRetryFailed` instead.
 - `maxRoundLag` (2h) bounds settlement rounds; `gracePeriod` (24h) gates `voidMarket`.
 - A scheduled `settle` never reverts on a handled path (a revert is still billed): closed market, no eligible round, retry booking refused (`SettlementRetryFailed`), retries exhausted (`SettlementRetriesExhausted`), or a Chainlink feed that reverts (treated as no round). `schedulePending` tracks an unexecuted schedule; `withdrawReserve` holds back `SCHEDULED_EXECUTION_COST` while it is set.
 - Payouts come from recorded pools only: `payout = amount * (yesPool + noPool) / winningPool`; Invalid outcome refunds 1:1; losers get 0. Total winner payouts never exceed the pool (fuzz-tested).
@@ -79,10 +80,11 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 
 ## How to verify a change
 
-1. `yarn foundry:test` (expect 104 passing, 100 percent line coverage of the production contracts).
+1. `yarn foundry:test` (expect 111 unit tests and 5 invariants passing, 100 percent line coverage of the production contracts).
 2. `yarn next:lint`, `yarn next:check-types`, `yarn next:test`, `yarn next:build`.
 3. Touching settlement, scheduling, units, or reserve accounting: run `DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet` on testnet.
 4. Touching `.harness/` behavior: `yarn harness:validate` (Tiers 0 to 2).
+5. Touching the contract: `slither . --filter-paths "lib/|test/|script/" --exclude-dependencies --fail-medium` in `packages/foundry` must pass. Review any new medium or high finding; suppress it only with an inline `slither-disable` comment that states why it is safe.
 
 ## What not to do
 

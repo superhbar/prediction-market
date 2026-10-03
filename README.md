@@ -18,7 +18,7 @@ One contract, `PredictionMarkets.sol`, holds every market. It creates two HTS to
 
 The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (pool split, price chart, stake panel, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
 
-Around it: 104 Foundry unit tests plus 5 invariants checked over random multi-market action sequences (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 238/238 lines, 89% branches), 77 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
+Around it: 111 Foundry unit tests plus 5 invariants checked over random multi-market action sequences (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 242/242 lines, 90% branches), 77 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
 
 ## What you get that is hard to build alone
 
@@ -28,7 +28,7 @@ Around it: 104 Foundry unit tests plus 5 invariants checked over random multi-ma
 - **Accounting you can audit.** Payouts come only from recorded pools, a fuzz test proves winners never receive more than the pool, and `withdrawReserve` can only pay out surplus beyond what traders and other markets are owed. A scheduled call never reverts on a handled path, because Hedera bills a reverted scheduled execution anyway.
 - **Positions you can trade before settlement.** YES and NO are ordinary HTS tokens, so the market page opens a SaucerSwap V1 pool for either side and buys or sells against it, with quotes from the router and a 1% slippage floor. The pool fee is priced in dollars through Hedera's exchange-rate system contract, and the e2e script opens a pool, buys and sells on testnet. See [Trading before settlement](#trading-before-settlement-saucerswap).
 - **Hedera details already measured.** [docs/hedera-notes.md](docs/hedera-notes.md) records what was measured on testnet: tinybar inside the EVM vs weibar in wallets, the 0.65 HBAR first-stake association cost, scheduled-call gas and billing, why `forge script --broadcast` cannot reach Hashio, and the mirror node log filter that silently matches nothing.
-- **Proof at every level.** 104 Foundry unit tests with 100% line coverage of the production contracts, 5 accounting invariants checked over 25,600 random actions per run, 77 vitest tests, an end-to-end script that runs create, stake, a SaucerSwap pool and trade, scheduled settlement, redeem and reserve withdrawal on real testnet, source verified on Sourcify, CI that scaffolds the template fresh with both npm and yarn, then lints, tests, builds, boots it and requests every core route, and a [live demo](https://predera.vercel.app).
+- **Proof at every level.** 111 Foundry unit tests with 100% line coverage of the production contracts, 5 accounting invariants checked over 25,600 random actions per run, 77 vitest tests, an end-to-end script that runs create, stake, a SaucerSwap pool and trade, scheduled settlement, redeem and reserve withdrawal on real testnet, source verified on Sourcify, CI that scaffolds the template fresh with both npm and yarn, then lints, tests, builds, boots it and requests every core route, and a [live demo](https://predera.vercel.app).
 - **Ready for coding agents.** `AGENTS.md` lists the invariants an agent must not break, and `.harness/` ships a Hedera Harness recipe whose validators pass in freshly scaffolded npm and yarn projects. The market activity panel was built through that recipe.
 
 ## Quick start
@@ -146,6 +146,8 @@ The contract only settles on a Chainlink round it can prove is first: walking ba
 ### Self-scheduling and retries (HIP-1215)
 
 At creation the contract books `settle(marketId)` as a scheduled call for expiry plus 10 minutes through the Schedule Service at `0x16b`. Inside a scheduled call, `msg.sender` equals the contract itself, which is how `settle` knows it was invoked by the network. If no Chainlink round exists at or after expiry yet, the scheduled call books its own retry (plus 30 minutes, up to 4 retries, so checks run at +10, +40, +70, +100 and +130 minutes and cover the whole 2 hour round window) from the market's reserve instead of reverting. Anyone can also call `settle` directly once a round exists.
+
+A second can be full: the Schedule Service limits how much scheduled gas runs per second, and many markets expiring on the hour would all want the same settlement second. Every booking, at creation and for retries, therefore checks `hasScheduleCapacity` and moves forward one second at a time, up to 8 seconds, before giving up. A booking only counts when the service answers SUCCESS and returns a schedule address; a SUCCESS with a zero address is treated as a failure. At creation a failed booking reverts, so a market never exists without its settlement; inside a scheduled retry it emits `SettlementRetryFailed` and returns, because a reverted scheduled call is still billed.
 
 ### Pyth fallback and voiding
 
@@ -297,7 +299,7 @@ yarn foundry:test
 yarn next:test
 ```
 
-`yarn foundry:test` runs 104 unit tests and an invariant suite. The invariant suite (`test/PredictionMarkets.invariant.t.sol`) drives 128 random sequences of 200 actions across up to 8 markets and 3 traders: create, stake, trade tokens between traders, publish or withhold oracle rounds, let time pass, run due schedules (billing the contract what testnet measured), settle by hand, void, redeem and withdraw reserves. After every action it checks that trader liability equals stakes minus payouts, the reserve total equals the sum of market reserves, the contract stays solvent after network billing, every outstanding token can still be redeemed in full, and a closed market never changes. Breaking the liability update, the reserve charge, the pending-execution holdback or the payout formula makes it fail. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent for the production contracts (PredictionMarkets 238/238 lines, 89% branches). `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
+`yarn foundry:test` runs 111 unit tests and an invariant suite. The invariant suite (`test/PredictionMarkets.invariant.t.sol`) drives 128 random sequences of 200 actions across up to 8 markets and 3 traders: create, stake, trade tokens between traders, publish or withhold oracle rounds, let time pass, run due schedules (billing the contract what testnet measured), settle by hand, void, redeem and withdraw reserves. After every action it checks that trader liability equals stakes minus payouts, the reserve total equals the sum of market reserves, the contract stays solvent after network billing, every outstanding token can still be redeemed in full, and a closed market never changes. Breaking the liability update, the reserve charge, the pending-execution holdback or the payout formula makes it fail. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent for the production contracts (PredictionMarkets 242/242 lines, 90% branches). `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
 
 `yarn next:test` runs vitest for units (including the pre-stake payout preview), feeds, status, Hashscan helpers, the SaucerSwap price and slippage math, and the HBAR price conversion. Redeem amounts come from the contract's own `quotePayout`.
 
@@ -377,6 +379,23 @@ Common changes:
 1. Skim the fee in `stake` (grow the market reserve or a recorded fee balance, not a separate transfer).
 2. Keep `totalPoolLiability` equal to HBAR owed to traders only, so `withdrawReserve` accounting still protects pools.
 3. Surface the fee in the create form estimate (`packages/nextjs/hooks/markets/useCreationEstimate.ts`) and document it next to the reserve.
+
+## Security checks
+
+CI runs two scanners on every push, in the `security` job:
+
+- **Gitleaks** scans every commit for secrets. `.gitleaksignore` lists the only two hits, both in the imported scaffold-hbar blank template: a string inside the vendored Yarn release, and scaffold-hbar's public shared Alchemy key, which this template never used and has removed.
+- **Slither** analyses the contracts and fails the build on any medium or high finding that has not been reviewed. Each reviewed finding has an inline `slither-disable` comment that says why it is safe:
+
+| Finding | Where | Why it is safe |
+|---|---|---|
+| arbitrary-send-eth | `redeem` | Pays `msg.sender` for tokens just wiped from its own account |
+| reentrancy-no-eth | `_book` | The only external call is the Schedule Service system contract at `0x16b`, which cannot call back |
+| incorrect-equality | `createMarket`, `withdrawReserve` | Compares response codes and amounts to zero, not balances |
+| uninitialized-local | `_firstRoundAtOrAfter`, `_createPositionToken` | Zero is the intended starting value |
+| unused-return | `stake`, `_firstRoundAtOrAfter` | Only the HTS response code and the needed round fields are used |
+
+The remaining low and informational results are deliberate: block timestamps drive expiry and settlement, `redeem` and `withdrawReserve` pay with a low-level call guarded by `nonReentrant`, and events follow external calls to HTS and HSS system contracts.
 
 ## Troubleshooting
 

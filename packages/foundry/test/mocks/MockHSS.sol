@@ -24,10 +24,24 @@ contract MockHSS {
     int64 public responseCode = SUCCESS;
     /// @notice All recorded scheduleCall invocations.
     Call[] public calls;
+    /// @notice Seconds with no capacity left, on top of the global capacity switch.
+    mapping(uint256 => bool) public busy;
+    /// @notice When set, scheduleCall reports its response code but returns no schedule address.
+    bool public omitAddress;
 
     /// @notice Sets the hasScheduleCapacity answer.
     function setCapacity(bool value) external {
         capacity = value;
+    }
+
+    /// @notice Marks one second as full, as when other schedules already used its capacity.
+    function setBusy(uint256 second, bool value) external {
+        busy[second] = value;
+    }
+
+    /// @notice Makes scheduleCall return a zero schedule address.
+    function setOmitAddress(bool value) external {
+        omitAddress = value;
     }
 
     /// @notice Sets the scheduleCall response code.
@@ -67,11 +81,11 @@ contract MockHSS {
                 schedule: scheduleAddress
             })
         );
-        return (responseCode, scheduleAddress);
+        return (responseCode, omitAddress ? address(0) : scheduleAddress);
     }
 
     /// @notice Reports schedule capacity per test configuration.
-    function hasScheduleCapacity(uint256, uint256) external view returns (bool hasCapacity) {
-        return capacity;
+    function hasScheduleCapacity(uint256 second, uint256) external view returns (bool hasCapacity) {
+        return capacity && !busy[second];
     }
 }

@@ -76,6 +76,8 @@ contract PredictionMarkets is ReentrancyGuard {
     uint256 public constant SCHEDULED_EXECUTION_COST = 5e7;
     /// @notice Upper bound on the Chainlink round walk-back.
     uint256 private constant MAX_WALK_STEPS = 48;
+    /// @notice Consecutive seconds probed for schedule capacity, from the intended time, before giving up.
+    uint256 private constant SCHEDULE_PROBES = 8;
 
     /// @notice Market record. Pools and reserve are in tinybar.
     struct Market {
@@ -142,9 +144,9 @@ contract PredictionMarkets is ReentrancyGuard {
     error InvalidExpiry();
     /// @notice Thrown when the post-fee reserve is below the minimum.
     error InsufficientReserve(uint256 reserve, uint256 required);
-    /// @notice Thrown when the network reports no schedule capacity at the settlement time.
+    /// @notice Thrown when no second in the probe window has schedule capacity, or the service reverted.
     error NoScheduleCapacity();
-    /// @notice Thrown when a schedule booking returns a non-SUCCESS response code.
+    /// @notice Thrown when a booking returns a non-SUCCESS code, or SUCCESS without a schedule address.
     error ScheduleFailed(int64 responseCode);
     /// @notice Thrown when a market id is out of range.
     error InvalidMarketId();
@@ -214,7 +216,8 @@ contract PredictionMarkets is ReentrancyGuard {
     event SettlementRetriesExhausted(uint256 indexed marketId);
     /// @notice A scheduled settlement found no eligible round and the Schedule Service refused the retry.
     ///         No retry fee is taken; the market stays Open like after SettlementRetriesExhausted.
-    /// @param responseCode The HSS response code, or 0 when the HSS call itself reverted.
+    /// @param responseCode The HSS response code (SUCCESS when it returned no schedule address), or 0 when no
+    ///        probed second had capacity or the HSS call itself reverted.
     event SettlementRetryFailed(uint256 indexed marketId, int64 responseCode);
     /// @notice Emitted when a market settles with its outcome, normalized price and source.
     event MarketSettled(uint256 indexed marketId, Outcome outcome, int256 price, uint256 priceTime, PriceSource source);
@@ -267,7 +270,11 @@ contract PredictionMarkets is ReentrancyGuard {
         (address yesToken, address noToken, uint256 spent) = _createPositionTokens(marketId, msg.value);
         uint256 reserve = msg.value - spent;
         if (reserve < minReserve) revert InsufficientReserve(reserve, minReserve);
-        address schedule = _bookSettlement(marketId, uint256(expiry) + settlementDelay);
+        (int64 rc, address schedule,) = _book(marketId, uint256(expiry) + settlementDelay);
+        // rc 0 is _book's "nothing booked" answer, not an amount.
+        // slither-disable-next-line incorrect-equality
+        if (rc == 0) revert NoScheduleCapacity();
+        if (rc != SUCCESS || schedule == address(0)) revert ScheduleFailed(rc);
         totalReserves += reserve;
 
         _markets[marketId] = Market({
@@ -309,8 +316,11 @@ contract PredictionMarkets is ReentrancyGuard {
         int64 amount = int64(uint64(msg.value));
 
         address token = yes ? m.yesToken : m.noToken;
+        // Only the response code matters; the new supply and serial numbers are unused for fungible tokens.
+        // slither-disable-start unused-return
         // forge-lint: disable-next-line(unused-return)
         (int64 mintRc,,) = HTS.mintToken(token, amount, new bytes[](0));
+        // slither-disable-end unused-return
         if (mintRc != SUCCESS) revert TokenMintFailed(mintRc);
         int64 transferRc = HTS.transferToken(token, address(this), msg.sender, amount);
         if (transferRc != SUCCESS) revert TokenTransferFailed(transferRc);
@@ -353,18 +363,9 @@ contract PredictionMarkets is ReentrancyGuard {
         (bool eligible, int256 price, uint256 priceTime) = _eligibleChainlinkRound(m.feedKey, m.expiry);
         if (!eligible) {
             if (msg.sender == address(this) && m.retriesLeft > 0 && m.reserve >= retryCostEstimate) {
-                uint256 retryAt = block.timestamp + retryDelay;
                 // A failed booking must not revert either: the execution charge above has to stick.
-                int64 rc;
-                address schedule;
-                try HSS.scheduleCall(
-                    address(this), retryAt, SETTLE_GAS, 0, abi.encodeCall(this.settle, (marketId))
-                ) returns (
-                    int64 code, address booked
-                ) {
-                    (rc, schedule) = (code, booked);
-                } catch { }
-                if (rc != SUCCESS) {
+                (int64 rc, address schedule, uint256 retryAt) = _book(marketId, block.timestamp + retryDelay);
+                if (rc != SUCCESS || schedule == address(0)) {
                     // forge-lint: disable-next-line(reentrancy-events)
                     emit SettlementRetryFailed(marketId, rc);
                     return;
@@ -470,6 +471,8 @@ contract PredictionMarkets is ReentrancyGuard {
         int64 rc = IHtsWipe(address(HTS)).wipeTokenAccount(token, msg.sender, wipeAmount);
         if (rc != SUCCESS) revert TokenWipeFailed(rc);
         totalPoolLiability -= payout;
+        // Pays the caller for the tokens just wiped from its own account; nobody else can be paid here.
+        // slither-disable-next-line arbitrary-send-eth,low-level-calls
         (bool ok,) = msg.sender.call{ value: payout }("");
         if (!ok) revert PayoutTransferFailed();
         // forge-lint: disable-next-line(reentrancy-events)
@@ -495,6 +498,7 @@ contract PredictionMarkets is ReentrancyGuard {
         uint256 amount = recorded < available ? recorded : available;
         m.reserve = holdback;
         totalReserves -= recorded;
+        // slither-disable-next-line incorrect-equality
         if (amount == 0) revert NoReserve();
         (bool ok,) = msg.sender.call{ value: amount }("");
         if (!ok) revert PayoutTransferFailed();
@@ -565,14 +569,35 @@ contract PredictionMarkets is ReentrancyGuard {
         spent = balanceBefore + valueIn - address(this).balance;
     }
 
-    /// @notice Books the scheduled settlement call for a market.
-    /// @return schedule The schedule address returned by the Schedule Service.
-    function _bookSettlement(uint256 marketId, uint256 settleAt) internal returns (address schedule) {
-        if (!HSS.hasScheduleCapacity(settleAt, SETTLE_GAS)) revert NoScheduleCapacity();
-        (int64 rc, address scheduledAt) =
-            HSS.scheduleCall(address(this), settleAt, SETTLE_GAS, 0, abi.encodeCall(this.settle, (marketId)));
-        if (rc != SUCCESS) revert ScheduleFailed(rc);
-        return scheduledAt;
+    /// @notice Books settle(marketId) at the first second from `at` that has schedule capacity.
+    /// @dev Probes up to SCHEDULE_PROBES consecutive seconds, since a busy second refuses new schedules. Never
+    ///      reverts, so a scheduled caller keeps its execution charge: rc is 0 when no probed second had
+    ///      capacity or a service call reverted. Callers treat SUCCESS without a schedule address as failure.
+    /// @return rc The scheduleCall response code.
+    /// @return schedule The schedule address, zero when nothing was booked.
+    /// @return bookedAt The second the call is booked for.
+    function _book(uint256 marketId, uint256 at) internal returns (int64 rc, address schedule, uint256 bookedAt) {
+        for (uint256 i = 0; i < SCHEDULE_PROBES; ++i) {
+            bookedAt = at + i;
+            // slither-disable-next-line calls-loop
+            try HSS.hasScheduleCapacity(bookedAt, SETTLE_GAS) returns (bool free) {
+                if (!free) continue;
+            } catch {
+                continue;
+            }
+            // The Schedule Service at 0x16b is a system contract and cannot call back into this one.
+            // slither-disable-next-line calls-loop,reentrancy-no-eth
+            try HSS.scheduleCall(
+                address(this), bookedAt, SETTLE_GAS, 0, abi.encodeCall(this.settle, (marketId))
+            ) returns (
+                int64 code, address booked
+            ) {
+                return (code, booked, bookedAt);
+            } catch {
+                return (0, address(0), bookedAt);
+            }
+        }
+        return (0, address(0), bookedAt);
     }
 
     /// @notice Creates one HTS position token with this contract as treasury, supply key and wipe key.
@@ -592,6 +617,8 @@ contract PredictionMarkets is ReentrancyGuard {
                 delegatableContractId: address(0)
             })
         });
+        // Filled field by field below; the fields left out keep their zero defaults on purpose.
+        // slither-disable-next-line uninitialized-local
         IHederaTokenService.HederaToken memory token;
         token.name = name;
         token.symbol = symbol;
@@ -655,7 +682,9 @@ contract PredictionMarkets is ReentrancyGuard {
     {
         IAggregatorV3 feed = IAggregatorV3(feeds[feedKey].chainlink);
         // The candidate is the earliest valid (positive) round at or after expiry seen so far; a
-        // non-positive candidateAnswer means none has been seen yet.
+        // non-positive candidateAnswer means none has been seen yet. All three start at zero on purpose,
+        // and the walk reads only the round fields it needs.
+        // slither-disable-start uninitialized-local,unused-return,calls-loop
         uint80 cursor;
         int256 candidateAnswer;
         uint256 candidateTime;
@@ -706,6 +735,7 @@ contract PredictionMarkets is ReentrancyGuard {
             // forge-lint: disable-next-line(boolean-cst)
             return (false, 0, 0);
         }
+        // slither-disable-end uninitialized-local,unused-return,calls-loop
     }
 
     /// @notice Deducts an estimated network cost from a market's reserve, saturating at zero.

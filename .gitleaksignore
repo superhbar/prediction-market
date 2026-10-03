@@ -1,0 +1,5 @@
+# Both findings are in the imported scaffold-hbar blank template (commit 5fb36e2), not in this template's code.
+# scaffold-hbar's public shared Alchemy default key, since removed: this template never used Alchemy.
+5fb36e296fb0a5ae9c8e63a376ea0bc79a59c763:packages/foundry/.env.example:generic-api-key:18
+# A string inside the vendored Yarn 3.2.3 release bundle, not a credential.
+5fb36e296fb0a5ae9c8e63a376ea0bc79a59c763:.yarn/releases/yarn-3.2.3.cjs:generic-api-key:127

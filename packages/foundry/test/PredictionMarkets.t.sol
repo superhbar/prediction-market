@@ -607,6 +607,81 @@ contract PredictionMarketsTest is Test {
         assertEq(hss.callCount(), callsBefore + 1);
     }
 
+    function test_Create_ProbesPastBusySeconds() public {
+        uint256 settleAt = uint256(expiry) + 5 minutes;
+        hss.setBusy(settleAt, true);
+        hss.setBusy(settleAt + 1, true);
+        _createMarket();
+        (, uint256 bookedAt,) = hss.callArgs(hss.callCount() - 1);
+        assertEq(bookedAt, settleAt + 2);
+    }
+
+    function test_Create_RevertsWhenEveryProbedSecondIsBusy() public {
+        uint256 settleAt = uint256(expiry) + 5 minutes;
+        for (uint256 i = 0; i < 8; ++i) {
+            hss.setBusy(settleAt + i, true);
+        }
+        vm.expectRevert(PredictionMarkets.NoScheduleCapacity.selector);
+        _createMarket();
+    }
+
+    function test_Create_TreatsACapacityCheckRevertAsBusy() public {
+        vm.mockCallRevert(address(hss), abi.encodeWithSelector(MockHSS.hasScheduleCapacity.selector), "");
+        vm.expectRevert(PredictionMarkets.NoScheduleCapacity.selector);
+        _createMarket();
+    }
+
+    function test_Create_RevertsOnSuccessWithoutScheduleAddress() public {
+        hss.setOmitAddress(true);
+        vm.expectRevert(abi.encodeWithSelector(PredictionMarkets.ScheduleFailed.selector, int64(22)));
+        _createMarket();
+    }
+
+    function test_Settle_ScheduledRetryProbesPastBusySeconds() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        vm.warp(expiry + 5);
+        uint256 retryAt = block.timestamp + 10 minutes;
+        hss.setBusy(retryAt, true);
+        vm.expectEmit(true, false, false, false, address(pm));
+        emit PredictionMarkets.SettlementRetryScheduled(marketId, address(0), retryAt + 1, 1);
+        vm.prank(address(pm));
+        pm.settle(marketId);
+        (, uint256 bookedAt,) = hss.callArgs(hss.callCount() - 1);
+        assertEq(bookedAt, retryAt + 1);
+        assertTrue(pm.getMarket(marketId).schedulePending);
+    }
+
+    function test_Settle_ScheduledRetryWithoutScheduleAddressKeepsAccounting() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        uint256 reserveBefore = pm.getMarket(marketId).reserve;
+        vm.warp(expiry + 5);
+        hss.setOmitAddress(true);
+        vm.expectEmit(true, false, false, true, address(pm));
+        emit PredictionMarkets.SettlementRetryFailed(marketId, int64(22));
+        vm.prank(address(pm));
+        pm.settle(marketId);
+        PredictionMarkets.Market memory m = pm.getMarket(marketId);
+        assertFalse(m.schedulePending);
+        assertEq(m.retriesLeft, 2);
+        assertEq(m.reserve, reserveBefore - pm.SCHEDULED_EXECUTION_COST());
+    }
+
+    function test_Settle_ScheduledRetryWithNoCapacityKeepsAccounting() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        uint256 callsBefore = hss.callCount();
+        vm.warp(expiry + 5);
+        hss.setCapacity(false);
+        vm.expectEmit(true, false, false, true, address(pm));
+        emit PredictionMarkets.SettlementRetryFailed(marketId, 0);
+        vm.prank(address(pm));
+        pm.settle(marketId);
+        assertEq(hss.callCount(), callsBefore);
+        assertFalse(pm.getMarket(marketId).schedulePending);
+    }
+
     function test_Settle_ScheduledRetryRevertKeepsAccounting() public {
         uint256 marketId = _createMarket();
         _stakeBothSides(marketId);

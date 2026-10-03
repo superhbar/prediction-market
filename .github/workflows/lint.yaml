@@ -52,6 +52,37 @@ jobs:
       - name: Build nextjs
         run: yarn next:build
 
+  # Secrets anywhere in history fail the build, and so does any medium or high Slither finding that has not
+  # been reviewed. Reviewed findings carry an inline slither-disable comment with the reason next to the code.
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Gitleaks over every commit
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
+          ./gitleaks git --redact --no-banner .
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Slither
+        working-directory: packages/foundry
+        run: |
+          pip install --quiet slither-analyzer
+          slither . --filter-paths "lib/|test/|script/" --exclude-dependencies --fail-medium
+
   # Rehearses the bounty eligibility gate: scaffold this commit with the real create-scaffold-hbar CLI,
   # exactly as `npm create scaffold-hbar@latest -- --template superhbar/prediction-market` would, then
   # install, lint, type-check, test and build the fresh project with each supported package manager.
