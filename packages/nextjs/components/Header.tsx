@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Bars3Icon } from "@heroicons/react/24/outline";
 import { RainbowKitCustomConnectButton } from "~~/components/scaffold-hbar";
 import { useOutsideClick } from "~~/hooks/scaffold-hbar";
+import { BRAND } from "~~/utils/brand";
 
 type HeaderMenuLink = {
   label: string;
@@ -44,10 +45,10 @@ export const HeaderMenuLinks = () => {
               href={href}
               passHref
               className={`${
-                isActive ? "font-semibold underline underline-offset-4" : "opacity-70 hover:opacity-100"
-              } py-1.5 px-3 text-sm gap-2 grid grid-flow-col transition-opacity`}
+                isActive ? "bg-base-content/10 text-base-content" : "text-base-content/60 hover:text-base-content"
+              } rounded-lg py-1.5 px-3 text-sm font-medium transition-colors`}
             >
-              <span>{label}</span>
+              {label}
             </Link>
           </li>
         );
@@ -55,6 +56,16 @@ export const HeaderMenuLinks = () => {
     </>
   );
 };
+
+/** Brand mark: a Hedera-purple gradient tile. Swap it for your own logo. */
+const LogoMark = () => (
+  <span
+    aria-hidden
+    className="grid place-items-center w-8 h-8 rounded-lg bg-gradient-to-br from-hedera-purple to-hedera-cobalt text-white text-sm font-bold"
+  >
+    {BRAND.logoLetter}
+  </span>
+);
 
 /**
  * Site header
@@ -66,39 +77,36 @@ export const Header = () => {
   });
 
   return (
-    <div className="sticky lg:static top-0 navbar bg-base-200 min-h-0 shrink-0 justify-between z-20 border-b border-base-300 px-0 sm:px-2">
-      <div className="navbar-start w-auto lg:w-1/2">
-        <details className="dropdown" ref={burgerMenuRef}>
-          <summary className="ml-1 btn btn-ghost lg:hidden hover:bg-transparent">
-            <Bars3Icon className="h-1/2" />
-          </summary>
-          <ul
-            className="menu menu-compact dropdown-content mt-3 p-2 shadow-sm bg-base-100 rounded-box w-52"
-            onClick={() => {
-              burgerMenuRef?.current?.removeAttribute("open");
-            }}
-          >
+    <div className="sticky top-0 z-20 border-b border-base-content/10 bg-base-200/70 backdrop-blur-xl">
+      <div className="navbar min-h-0 h-16 max-w-[1200px] mx-auto px-4 sm:px-6 justify-between">
+        <div className="navbar-start w-auto gap-2">
+          <details className="dropdown lg:hidden" ref={burgerMenuRef}>
+            <summary className="btn btn-ghost btn-sm px-2" aria-label="Menu">
+              <Bars3Icon className="h-5 w-5" />
+            </summary>
+            <ul
+              className="menu dropdown-content mt-3 p-2 panel w-52 gap-1"
+              onClick={() => {
+                burgerMenuRef?.current?.removeAttribute("open");
+              }}
+            >
+              <HeaderMenuLinks />
+            </ul>
+          </details>
+          <Link href="/" passHref className="flex items-center gap-2.5 shrink-0">
+            <LogoMark />
+            <span className="font-semibold tracking-tight hidden sm:inline">{BRAND.name}</span>
+            <span className="hidden md:inline text-[11px] font-medium rounded-full px-2 py-0.5 bg-primary/15 text-primary">
+              Hedera
+            </span>
+          </Link>
+          <ul className="hidden lg:flex flex-nowrap menu menu-horizontal px-1 gap-1 ml-6">
             <HeaderMenuLinks />
           </ul>
-        </details>
-        <Link href="/" passHref className="hidden lg:flex items-baseline gap-2 ml-4 mr-6 shrink-0">
-          <span className="font-editorial font-black text-xl tracking-tight">prediction-market</span>
-          <span className="text-[11px] uppercase tracking-[0.18em] border border-base-300 rounded-full px-2 py-0.5 text-base-content/60">
-            on Hedera
-          </span>
-        </Link>
-        <Link href="/" passHref className="flex lg:hidden items-baseline gap-2 ml-1 mr-4 shrink-0">
-          <span className="font-editorial font-black text-lg tracking-tight hidden sm:inline">prediction-market</span>
-          <span className="font-editorial font-black text-xl tracking-tight sm:hidden" aria-label="prediction-market">
-            pm.
-          </span>
-        </Link>
-        <ul className="hidden lg:flex lg:flex-nowrap menu menu-horizontal px-1 gap-2 ml-4">
-          <HeaderMenuLinks />
-        </ul>
-      </div>
-      <div className="navbar-end grow mr-4">
-        <RainbowKitCustomConnectButton />
+        </div>
+        <div className="navbar-end grow">
+          <RainbowKitCustomConnectButton />
+        </div>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import { RedeemPanel } from "~~/components/markets/RedeemPanel";
 import { SettlementTimeline } from "~~/components/markets/SettlementTimeline";
 import { StakePanel } from "~~/components/markets/StakePanel";
 import { MarketDetailSkeleton } from "~~/components/markets/States";
+import { AssetBadge, StatusPill } from "~~/components/markets/ui";
 import { useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarket } from "~~/hooks/markets/useMarket";
 import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
@@ -19,7 +20,7 @@ import { deriveStatus, isRefund, resolutionLabel, sourceLabel, statusLabel } fro
 import { type Market, MarketOutcome, MarketState } from "~~/utils/markets/types";
 import { formatExactPrice } from "~~/utils/markets/units";
 
-/** Market detail in the editorial layout: headline, odds, chart, stake, settlement, redeem. */
+/** Market detail: headline, odds, chart, stake, settlement timeline, activity and redeem. */
 export function MarketDetail({ id }: { id: string }) {
   const { market, invalid, notFound, isLoading } = useMarket(id);
   const { config } = useMarketConfig();
@@ -29,7 +30,7 @@ export function MarketDetail({ id }: { id: string }) {
 
   if (isLoading) {
     return (
-      <div className="max-w-[1200px] mx-auto px-6 w-full pb-16">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-16">
         <MarketDetailSkeleton />
       </div>
     );
@@ -37,9 +38,9 @@ export function MarketDetail({ id }: { id: string }) {
 
   if (invalid || notFound || !market) {
     return (
-      <div className="max-w-[1200px] mx-auto px-6 w-full pb-16">
-        <p className="text-[12px] uppercase tracking-[0.2em] mt-10 text-base-content/60 m-0">No. {id}</p>
-        <h1 className="font-editorial font-black leading-[1.02] mt-3 text-4xl md:text-5xl">Market not found</h1>
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-16">
+        <p className="label-caps mt-10 m-0">Market #{id}</p>
+        <h1 className="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Market not found</h1>
         <p className="mt-4 text-[15px] opacity-80">No market with this id exists on this network.</p>
         <Link href="/" className="btn btn-primary btn-sm mt-6">
           Back to markets
@@ -57,33 +58,40 @@ export function MarketDetail({ id }: { id: string }) {
   );
 
   return (
-    <div className="max-w-[1200px] mx-auto px-6 w-full pb-16">
-      <p className="text-[12px] uppercase tracking-[0.2em] mt-10 text-base-content/60 m-0">
-        No. {id} &middot; {feedLabel} &middot; {statusLabel(status)}
-      </p>
-      <h1 className="font-editorial font-black leading-[1.02] mt-3 text-4xl md:text-6xl max-w-4xl">
-        {marketQuestion(feedLabel, market.strike, market.expiry)}
-      </h1>
-
-      <div className="mt-8">
-        <Resolution market={market} />
-        <OddsBar yesPool={market.yesPool} noPool={market.noPool} winner={winnerOf(market)} />
-        <div className="flex items-center gap-4 py-1 text-sm">
-          {status === "open" && <Countdown targetSec={market.expiry} label="Closes in" />}
-          {status !== "open" && market.state === MarketState.Open && (
-            <span>Trading closed &middot; {statusLabel(status)}</span>
-          )}
+    <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-8">
+      <div className="mt-8 flex items-start gap-4">
+        <AssetBadge feedLabel={feedLabel} size="lg" />
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-base-content/60">
+            <span className="font-semibold text-base-content">{feedLabel}</span>
+            <span>&middot; Market #{id}</span>
+            <StatusPill status={status} label={status === "settled" ? resolutionLabel(market) : statusLabel(status)} />
+          </div>
+          <h1 className="mt-2 text-2xl md:text-4xl font-bold tracking-tight leading-tight max-w-3xl">
+            {marketQuestion(feedLabel, market.strike, market.expiry)}
+          </h1>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 mt-6">
-        <div className="lg:col-span-7">
-          <p className="text-[12px] uppercase tracking-[0.2em] text-base-content/60 mb-2 m-0">
-            Fig. 1 &middot; {feedLabel} price
-          </p>
+      <Resolution market={market} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          <OddsBar
+            yesPool={market.yesPool}
+            noPool={market.noPool}
+            winner={winnerOf(market)}
+            footer={
+              status === "open" ? (
+                <Countdown targetSec={market.expiry} label="Closes in" />
+              ) : market.state === MarketState.Open ? (
+                <span>Trading closed &middot; {statusLabel(status)}</span>
+              ) : undefined
+            }
+          />
           {chartLoading && points.length === 0 ? (
-            <div className="border border-base-300 bg-base-100 p-5">
-              <div className="h-40 bg-base-300 animate-pulse" />
+            <div className="panel p-5">
+              <div className="h-56 rounded-xl bg-base-300 animate-pulse" />
             </div>
           ) : (
             <PriceChart points={points} strike={market.strike} feedLabel={feedLabel} expiry={market.expiry} />
@@ -91,8 +99,8 @@ export function MarketDetail({ id }: { id: string }) {
           <SettlementTimeline marketId={Number(id)} market={market} roundAvailable={roundAvailable} />
           <ActivityPanel marketId={id} />
         </div>
-        <div className="lg:col-span-5 order-first lg:order-none">
-          <div className="lg:sticky lg:top-6">
+        <div className="lg:col-span-4 order-first lg:order-none">
+          <div className="lg:sticky lg:top-24 flex flex-col gap-4">
             <StakePanel marketId={Number(id)} market={market} />
             <RedeemPanel marketId={Number(id)} market={market} />
           </div>
@@ -115,14 +123,14 @@ function Resolution({ market }: { market: Market }) {
 
   const voided = market.state === MarketState.Voided;
   return (
-    <section className="mb-8 border-y-2 border-base-content py-4 flex flex-col md:flex-row md:items-baseline gap-x-6 gap-y-1">
-      <p className="font-editorial font-black text-3xl m-0 whitespace-nowrap">{resolutionLabel(market)}</p>
-      <p className="text-sm m-0 opacity-80">
+    <section className="panel mt-6 p-5 border-primary/40 bg-primary/10 flex flex-col md:flex-row md:items-center gap-x-6 gap-y-1">
+      <p className="text-2xl font-bold m-0 whitespace-nowrap">{resolutionLabel(market)}</p>
+      <p className="text-sm m-0 text-base-content/75">
         {voided
           ? "No oracle price settled this market in time. Every position redeems 1:1 for the HBAR staked."
           : isRefund(market)
             ? "Only one side had stakes, so there was nothing to win. Every position redeems 1:1 for the HBAR staked."
-            : `${sourceLabel(market.source)} read ${formatExactPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatExactPrice(market.strike)}. Holders of the winning token redeem below.`}
+            : `${sourceLabel(market.source)} read ${formatExactPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatExactPrice(market.strike)}. Holders of the winning token redeem on the right.`}
       </p>
     </section>
   );

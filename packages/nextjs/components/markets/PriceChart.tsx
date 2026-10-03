@@ -17,7 +17,7 @@ const PAD = 12;
 export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProps) {
   if (points.length === 0) {
     return (
-      <div className="border border-base-300 bg-base-100 p-5">
+      <div className="panel p-5">
         <p className="text-sm text-base-content/60 m-0">Price history is unavailable for {feedLabel}.</p>
       </div>
     );
@@ -49,15 +49,29 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
   // Near the right edge the marker label flips to the left of its line so it is not clipped.
   const settleLabelLeft = settleIndex >= 0 && x(settleIndex) > WIDTH * 0.7;
 
+  const area = `${line} L ${x(points.length - 1).toFixed(1)},${HEIGHT - PAD} L ${x(0).toFixed(1)},${HEIGHT - PAD} Z`;
+
   return (
-    <div className="border border-base-300 bg-base-100 p-5">
+    <section className="panel p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+        <p className="label-caps m-0">{feedLabel} &middot; Chainlink</p>
+        <p className="m-0 text-2xl font-bold tabular-nums">{formatPrice(last.normalized)}</p>
+      </div>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full h-auto"
         role="img"
         aria-label={`${feedLabel} price chart`}
       >
-        <line x1="0" y1={strikeY} x2={WIDTH} y2={strikeY} stroke="#8259ef" strokeWidth="1.5" strokeDasharray="6 6" />
+        <line
+          x1="0"
+          y1={strikeY}
+          x2={WIDTH}
+          y2={strikeY}
+          stroke="var(--color-primary)"
+          strokeWidth="1.5"
+          strokeDasharray="6 6"
+        />
         {settleIndex >= 0 && (
           <g>
             <line
@@ -85,43 +99,28 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
               cy={y(points[settleIndex].normalized)}
               r="7"
               fill="none"
-              stroke="#8259ef"
+              stroke="var(--color-primary)"
               strokeWidth="2"
             />
           </g>
         )}
-        <text
-          x={8}
-          y={strikeLabelY}
-          fontSize="13"
-          fill="#8259ef"
-          textAnchor="start"
-          fontStyle="italic"
-          fontFamily="Fraunces,serif"
-        >
+        <text x={8} y={strikeLabelY} fontSize="13" fill="var(--color-primary)" fontWeight="600" textAnchor="start">
           Strike {formatExactPrice(strike)}
         </text>
-        <path d={line} fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.9" />
-        <circle cx={x(points.length - 1)} cy={lastY} r="5" fill="#8259ef" />
-        <text
-          x={x(points.length - 1) - 10}
-          y={lastY - 14}
-          fontSize="13"
-          fontWeight="600"
-          fill="currentColor"
-          stroke="var(--color-base-100)"
-          strokeWidth="4"
-          paintOrder="stroke"
-          textAnchor="end"
-        >
-          {formatPrice(last.normalized)}
-        </text>
+        <defs>
+          <linearGradient id="price-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#price-area)" />
+        <path d={line} fill="none" stroke="var(--color-secondary)" strokeWidth="2.5" />
+        <circle cx={x(points.length - 1)} cy={lastY} r="5" fill="var(--color-secondary)" />
       </svg>
-      <div className="editorial-rule my-4" />
-      <p className="font-editorial italic text-[15px] leading-relaxed m-0">
+      <p className="text-sm text-base-content/60 mt-3 mb-0">
         {points.length} Chainlink rounds, latest <strong>{formatPrice(last.normalized)}</strong> against a strike of{" "}
         <strong>{formatExactPrice(strike)}</strong>.
       </p>
-    </div>
+    </section>
   );
 }

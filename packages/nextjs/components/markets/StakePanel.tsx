@@ -120,16 +120,16 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
 
   if (!tradingOpen) {
     return (
-      <div className="border border-base-300 bg-base-100 p-7">
-        <p className="text-[12px] uppercase tracking-[0.2em] text-base-content/60 m-0">Trading closed</p>
-        <p className="font-editorial text-xl leading-snug mt-3 mb-0">
+      <div className="panel p-5">
+        <p className="label-caps m-0">Trading closed</p>
+        <p className="text-base font-medium leading-snug mt-2 mb-0">
           {isRefund(market)
             ? "Every position in this market redeems 1:1 for the HBAR staked."
             : market.state === MarketState.Settled
               ? "This market is resolved. Winning tokens redeem for a share of the whole pool."
               : "Expiry has passed. The scheduled settlement reads the first oracle price at or after expiry."}
         </p>
-        <p className="text-sm opacity-70 mt-3 mb-0">
+        <p className="text-sm text-base-content/60 mt-3 mb-0">
           {formatHbar(market.yesPool + market.noPool)} pooled: {formatHbar(market.yesPool)} on YES,{" "}
           {formatHbar(market.noPool)} on NO.
         </p>
@@ -138,42 +138,46 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
   }
 
   return (
-    <div className="border border-base-300 bg-base-100 p-7">
-      <p className="text-[12px] uppercase tracking-[0.2em] text-base-content/60 m-0">Take a side</p>
-      <div className="grid grid-cols-2 gap-2 mt-3">
+    <div className="panel p-5">
+      <p className="label-caps m-0">Take a side</p>
+      <div className="grid grid-cols-2 gap-2 mt-3" role="radiogroup" aria-label="Outcome">
         <button
-          className={`py-3 font-semibold rounded-full ${yes ? "bg-primary text-primary-content" : "border border-base-300"}`}
+          role="radio"
+          aria-checked={yes}
+          className={`py-3 rounded-xl font-semibold transition-colors ${yes ? "bg-yes text-white" : "bg-yes/10 text-yes hover:bg-yes/20"}`}
           onClick={() => setSide("YES")}
         >
-          YES {yesPct}%
+          Yes {yesPct}%
         </button>
         <button
-          className={`py-3 font-semibold rounded-full ${!yes ? "bg-primary text-primary-content" : "border border-base-300"}`}
+          role="radio"
+          aria-checked={!yes}
+          className={`py-3 rounded-xl font-semibold transition-colors ${!yes ? "bg-no text-white" : "bg-no/10 text-no hover:bg-no/20"}`}
           onClick={() => setSide("NO")}
         >
-          NO {100 - yesPct}%
+          No {100 - yesPct}%
         </button>
       </div>
 
-      <label className="text-sm font-medium block mt-6 mb-2" htmlFor={`stake-amount-${marketId}`}>
+      <label className="text-sm font-medium block mt-5 mb-2" htmlFor={`stake-amount-${marketId}`}>
         Amount
       </label>
-      <div className="flex items-center border border-base-300 rounded-lg px-4 py-3">
+      <div className="flex items-center rounded-xl bg-base-200 border border-base-content/10 px-4 py-3 focus-within:border-primary">
         <input
           id={`stake-amount-${marketId}`}
           value={amount}
           onChange={event => setAmount(event.target.value)}
           inputMode="decimal"
-          className="flex-1 bg-transparent outline-none font-editorial text-2xl min-w-0"
+          className="flex-1 bg-transparent outline-none text-2xl font-semibold tabular-nums min-w-0"
           aria-label="Stake amount"
         />
-        <span className="text-sm font-semibold ml-2">HBAR</span>
+        <span className="text-sm font-semibold text-base-content/60 ml-2">HBAR</span>
       </div>
       <div className="flex gap-2 mt-2 text-sm">
         {["10", "50", "100"].map(quick => (
           <button
             key={quick}
-            className="flex-1 border border-base-300 rounded-full py-1.5"
+            className="flex-1 rounded-lg bg-base-content/5 hover:bg-base-content/10 py-1.5 tabular-nums"
             onClick={() => setAmount(quick)}
           >
             {quick}
@@ -181,15 +185,14 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
         ))}
       </div>
 
-      <div className="editorial-rule my-5" />
-      <dl className="text-sm space-y-2">
+      <dl className="text-sm space-y-2 mt-5 pt-4 border-t border-base-content/10">
         <div className="flex justify-between">
-          <dt className="opacity-70">You receive</dt>
+          <dt className="text-base-content/60">You receive</dt>
           <dd className="font-semibold">{amountValid ? `${amount} ${side} tokens` : "-"}</dd>
         </div>
         <div className="flex justify-between">
-          <dt className="opacity-70">Pays if {side} wins</dt>
-          <dd className="font-semibold">
+          <dt className="text-base-content/60">Pays if {side} wins</dt>
+          <dd className="font-semibold tabular-nums">
             {amountTinybar !== undefined
               ? formatHbar(
                   projectedPayout(
@@ -203,10 +206,10 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
         </div>
       </dl>
 
-      {!account && <p className="text-[13px] mt-3 opacity-70">Connect a wallet to stake.</p>}
+      {!account && <p className="text-sm mt-3 text-base-content/60">Connect a wallet to stake.</p>}
       {association === "needs-association" && (
-        <div className="mt-3 text-sm">
-          <p className="opacity-70">This account is not associated with the {side} token.</p>
+        <div className="mt-3 text-sm rounded-xl bg-warning/10 p-3">
+          <p className="m-0 text-base-content/80">This account is not associated with the {side} token yet.</p>
           <button className="btn btn-sm btn-outline mt-2" onClick={associate} disabled={isAssociating}>
             {isAssociating ? "Associating…" : "Associate token"}
           </button>
@@ -214,13 +217,13 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
       )}
 
       <button
-        className="btn w-full mt-4 bg-neutral text-neutral-content rounded-full"
+        className={`btn w-full mt-4 border-0 text-white ${yes ? "bg-yes hover:bg-yes/90" : "bg-no hover:bg-no/90"}`}
         onClick={stake}
         disabled={!account || !amountValid || isStaking || association === "needs-association"}
       >
-        {isStaking ? "Staking…" : `Stake ${amountValid ? amount : "-"} HBAR on ${side}`}
+        {isStaking ? "Staking…" : `Buy ${side} for ${amountValid ? amount : "-"} HBAR`}
       </button>
-      <p className="text-[13px] mt-3 opacity-70 font-editorial italic">
+      <p className="text-xs mt-3 mb-0 text-base-content/50">
         The payout assumes no further stakes; later stakes move it. Your first stake on a token also pays a one-time
         auto-association fee.
       </p>

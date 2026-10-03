@@ -67,9 +67,11 @@ export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
 
   if (!redeemable) {
     return (
-      <div className="border border-dashed border-base-300 p-6 mt-4">
-        <p className="font-editorial italic text-lg m-0">Redeem opens after settlement</p>
-        <p className="text-sm mt-1 opacity-70 m-0">Winning positions can be redeemed once the market settles.</p>
+      <div className="panel border-dashed p-5">
+        <p className="font-semibold m-0">Redeem opens after settlement</p>
+        <p className="text-sm mt-1 text-base-content/60 m-0">
+          Winning positions can be redeemed once the market settles.
+        </p>
       </div>
     );
   }
@@ -77,11 +79,11 @@ export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
   const isCreator = !!account && account.toLowerCase() === market.creator.toLowerCase();
 
   return (
-    <div className="border border-base-300 bg-base-100 p-6 mt-4">
-      <p className="text-[12px] uppercase tracking-[0.2em] text-base-content/60 m-0">Redeem</p>
-      {!account && <p className="text-sm mt-2 opacity-70">Connect a wallet to see your balances.</p>}
+    <div className="panel p-5">
+      <p className="label-caps m-0">Redeem</p>
+      {!account && <p className="text-sm mt-2 text-base-content/60">Connect a wallet to see your balances.</p>}
       {account && yesBalance === 0n && noBalance === 0n && (
-        <p className="text-sm mt-2 opacity-70">No position tokens in this account.</p>
+        <p className="text-sm mt-2 text-base-content/60">No position tokens in this account.</p>
       )}
       {yesBalance > 0n && (
         <div className="flex items-center justify-between gap-2 mt-3 text-sm">
@@ -112,7 +114,7 @@ export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
         </div>
       )}
       {isCreator && market.reserve > 0n && (
-        <div className="flex items-center justify-between gap-2 mt-4 pt-4 border-t border-base-300 text-sm">
+        <div className="flex items-center justify-between gap-2 mt-4 pt-4 border-t border-base-content/10 text-sm">
           <span>Reserve {formatHbar(market.reserve)} returns to the creator</span>
           <button className="btn btn-sm btn-outline" onClick={withdraw} disabled={isMining}>
             Withdraw reserve

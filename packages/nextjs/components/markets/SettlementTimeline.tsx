@@ -113,10 +113,10 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
   };
 
   return (
-    <div>
-      <h2 className="font-editorial font-bold text-2xl mt-10 mb-5">How this market settles</h2>
+    <section className="panel p-5 md:p-6">
+      <h2 className="text-lg font-semibold mt-0 mb-5">How this market settles</h2>
       <ol className="relative list-none m-0 p-0 pl-8">
-        <span className="absolute left-[7px] top-2 bottom-2 w-px bg-base-300" aria-hidden />
+        <span className="absolute left-[7px] top-2 bottom-2 w-px bg-base-content/15" aria-hidden />
         <Step state={scheduleId ? "done" : "pending"} title="Settlement scheduled on-chain (HIP-1215)">
           {scheduleId ? (
             <>
@@ -192,7 +192,9 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
         </Step>
       </ol>
 
-      {!account && expired && isOpen && <p className="text-sm mt-4 opacity-70">Connect a wallet to settle or void.</p>}
+      {!account && expired && isOpen && (
+        <p className="text-sm mt-4 text-base-content/60">Connect a wallet to settle or void.</p>
+      )}
       <div className="flex flex-wrap gap-2 mt-4">
         {isOpen && expired && roundAvailable && (
           <button className="btn btn-sm btn-primary" onClick={settleNow} disabled={!account || isMining}>
@@ -205,7 +207,7 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
           </button>
         )}
         {isOpen && pythWindowOpen && !roundAvailable && !pythEnabled && (
-          <p className="text-sm opacity-70 m-0 w-full">
+          <p className="text-sm text-base-content/60 m-0 w-full">
             Pyth fallback is not configured. Voiding after the grace period still applies.
           </p>
         )}
@@ -215,7 +217,7 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
           </button>
         )}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -237,13 +239,13 @@ function Step({
     state === "done"
       ? "bg-primary border-primary"
       : state === "active"
-        ? "bg-base-200 border-primary"
-        : "bg-base-200 border-base-300";
+        ? "bg-base-100 border-primary animate-pulse"
+        : "bg-base-100 border-base-content/20";
   return (
     <li className={`relative ${last ? "" : "pb-7"} ${state === "skipped" ? "opacity-50" : ""}`}>
       <span className={`absolute -left-8 top-1 w-[15px] h-[15px] rounded-full border-2 ${dot}`} aria-hidden />
       <p className="font-semibold m-0">{title}</p>
-      <p className="text-sm text-base-content/70 m-0 mt-1">{children}</p>
+      <p className="text-sm text-base-content/60 m-0 mt-1">{children}</p>
     </li>
   );
 }

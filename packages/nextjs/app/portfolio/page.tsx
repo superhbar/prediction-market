@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { useAccount, useReadContracts } from "wagmi";
 import { EmptyState } from "~~/components/markets/States";
+import { AssetBadge } from "~~/components/markets/ui";
 import { useMarkets } from "~~/hooks/markets/useMarkets";
 import { usePositions } from "~~/hooks/markets/usePositions";
 import { useDeployedContractInfo, useTargetNetwork } from "~~/hooks/scaffold-hbar";
@@ -48,9 +49,9 @@ const PortfolioView = () => {
 
   if (!account) {
     return (
-      <div className="max-w-[1200px] mx-auto px-6 w-full pb-16">
-        <p className="text-[12px] uppercase tracking-[0.2em] mt-10 text-base-content/60 m-0">Portfolio</p>
-        <h1 className="font-editorial font-black leading-[1.02] mt-3 text-4xl md:text-5xl">Your positions</h1>
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-8">
+        <p className="label-caps mt-10 m-0">Portfolio</p>
+        <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Your positions</h1>
         <div className="mt-8">
           <EmptyState title="No wallet connected" body="Connect a wallet to see positions across markets." />
         </div>
@@ -61,12 +62,12 @@ const PortfolioView = () => {
   const loading = positionsLoading || marketsLoading;
 
   return (
-    <div className="max-w-[1200px] mx-auto px-6 w-full pb-16">
-      <p className="text-[12px] uppercase tracking-[0.2em] mt-10 text-base-content/60 m-0">Portfolio</p>
-      <h1 className="font-editorial font-black leading-[1.02] mt-3 text-4xl md:text-5xl">Your positions</h1>
+    <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-8">
+      <p className="label-caps mt-10 m-0">Portfolio</p>
+      <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Your positions</h1>
       <div className="mt-8">
         {loading ? (
-          <div className="h-24 bg-base-300 animate-pulse" aria-hidden />
+          <div className="h-32 panel animate-pulse" aria-hidden />
         ) : positions.length === 0 ? (
           <EmptyState
             title="No positions yet"
@@ -86,24 +87,28 @@ const PortfolioView = () => {
                 <Link
                   key={position.marketId}
                   href={`/markets/${position.marketId}`}
-                  className="border border-base-300 bg-base-100 p-6 hover:border-primary transition-colors"
+                  className="panel p-5 hover:border-primary/60 transition-colors"
                 >
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-base-content/60 m-0">
-                    No. {position.marketId}
-                    {market ? ` · ${bytes32ToFeedKey(market.feedKey)}` : ""}
-                  </p>
-                  <h2 className="font-editorial font-bold text-xl leading-snug mt-2">
+                  <div className="flex items-center gap-3">
+                    {market && <AssetBadge feedLabel={bytes32ToFeedKey(market.feedKey)} />}
+                    <p className="text-sm text-base-content/60 m-0">
+                      {market ? `${bytes32ToFeedKey(market.feedKey)} · ` : ""}#{position.marketId}
+                    </p>
+                  </div>
+                  <h2 className="text-lg font-semibold leading-snug mt-3 mb-0">
                     {market
                       ? marketQuestion(bytes32ToFeedKey(market.feedKey), market.strike, market.expiry)
                       : `Market ${position.marketId}`}
                   </h2>
-                  <div className="text-sm mt-4 space-y-1">
-                    <p className="m-0">
-                      YES {formatHbar(position.yesBalance)} &middot; redeemable {formatHbar(yesQuote)}
-                    </p>
-                    <p className="m-0">
-                      NO {formatHbar(position.noBalance)} &middot; redeemable {formatHbar(noQuote)}
-                    </p>
+                  <div className="grid grid-cols-2 gap-2 mt-4 text-sm">
+                    <div className="rounded-xl bg-yes/10 px-3 py-2">
+                      <p className="m-0 font-semibold text-yes">YES {formatHbar(position.yesBalance)}</p>
+                      <p className="m-0 text-base-content/60 tabular-nums">Redeemable {formatHbar(yesQuote)}</p>
+                    </div>
+                    <div className="rounded-xl bg-no/10 px-3 py-2">
+                      <p className="m-0 font-semibold text-no">NO {formatHbar(position.noBalance)}</p>
+                      <p className="m-0 text-base-content/60 tabular-nums">Redeemable {formatHbar(noQuote)}</p>
+                    </div>
                   </div>
                 </Link>
               );

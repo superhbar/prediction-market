@@ -23,7 +23,7 @@ export function Countdown({ targetSec, label }: CountdownProps) {
 
   return (
     <span className="whitespace-nowrap">
-      {label} <strong className="text-primary">{text}</strong>
+      {label} <strong className="font-semibold text-base-content tabular-nums">{text}</strong>
     </span>
   );
 }

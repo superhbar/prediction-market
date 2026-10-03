@@ -13,6 +13,7 @@ import { Header } from "~~/components/Header";
 import { LocalChainErrorBanner } from "~~/components/LocalChainErrorBanner";
 import { BlockieAvatar } from "~~/components/scaffold-hbar";
 import { wagmiConfig } from "~~/services/web3/wagmiConfig";
+import { BRAND } from "~~/utils/brand";
 
 const ScaffoldHbarApp = ({ children }: { children: React.ReactNode }) => {
   return (
@@ -42,7 +43,7 @@ function subscribe() {
 
 export const ScaffoldHbarAppWithProviders = ({ children }: { children: React.ReactNode }) => {
   const { resolvedTheme } = useTheme();
-  const isDarkMode = resolvedTheme === "dark";
+  const isDarkMode = resolvedTheme === "hedera";
   // False during SSR and hydration, true once mounted: same timing as the
   // previous mounted-flag effect, without setting state inside an effect.
   const mounted = useSyncExternalStore(
@@ -51,34 +52,28 @@ export const ScaffoldHbarAppWithProviders = ({ children }: { children: React.Rea
     () => false,
   );
 
-  const rainbowKitTheme = mounted
-    ? isDarkMode
-      ? darkTheme({
-          accentColor: "#8259ef",
+  // Dark is the default theme, so it is also what renders before hydration.
+  const rainbowKitTheme =
+    mounted && !isDarkMode
+      ? lightTheme({
+          accentColor: BRAND.primaryColorLight,
           accentColorForeground: "white",
           borderRadius: "large",
           fontStack: "system",
           overlayBlur: "small",
         })
-      : lightTheme({
-          accentColor: "#4f46e5",
+      : darkTheme({
+          accentColor: BRAND.primaryColor,
           accentColorForeground: "white",
           borderRadius: "large",
           fontStack: "system",
           overlayBlur: "small",
-        })
-    : lightTheme({
-        accentColor: "#4f46e5",
-        accentColorForeground: "white",
-        borderRadius: "large",
-        fontStack: "system",
-        overlayBlur: "small",
-      });
+        });
 
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <ProgressBar height="3px" color="#2299dd" />
+        <ProgressBar height="3px" color={BRAND.primaryColor} />
         <RainbowKitProvider avatar={BlockieAvatar} coolMode initialChain={hederaTestnet} theme={rainbowKitTheme}>
           <ScaffoldHbarApp>{children}</ScaffoldHbarApp>
         </RainbowKitProvider>

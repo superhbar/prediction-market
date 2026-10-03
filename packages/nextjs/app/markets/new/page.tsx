@@ -123,24 +123,19 @@ const NewMarketPage = () => {
   };
 
   return (
-    <div className="max-w-[760px] mx-auto px-6 w-full pb-16">
-      <p className="text-[12px] uppercase tracking-[0.2em] mt-10 text-base-content/60 m-0">New market</p>
-      <h1 className="font-editorial font-black leading-[1.02] mt-3 text-4xl md:text-5xl">Open a market</h1>
-      <p className="mt-4 text-[15px] leading-relaxed opacity-80">
+    <div className="max-w-[720px] mx-auto px-4 sm:px-6 w-full pb-8">
+      <p className="label-caps mt-10 m-0">New market</p>
+      <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Open a market</h1>
+      <p className="mt-3 text-base-content/70">
         Pick a feed, set the strike and expiry. Creation books the settlement schedule and mints both position tokens.
       </p>
 
-      <div className="border border-base-300 bg-base-100 p-7 mt-8 space-y-6">
+      <div className="panel p-5 md:p-7 mt-8 space-y-6">
         <div>
           <label className="text-sm font-medium block mb-2" htmlFor="feed">
             Price feed
           </label>
-          <select
-            id="feed"
-            className="select select-bordered w-full"
-            value={feed}
-            onChange={event => setFeed(event.target.value)}
-          >
+          <select id="feed" className="select w-full" value={feed} onChange={event => setFeed(event.target.value)}>
             {FEED_KEYS.map(key => (
               <option key={key} value={key}>
                 {key}
@@ -155,7 +150,7 @@ const NewMarketPage = () => {
           </label>
           <input
             id="strike"
-            className="input input-bordered w-full font-editorial text-xl"
+            className="input w-full text-lg font-semibold tabular-nums"
             value={strikeValue}
             inputMode="decimal"
             placeholder={priceLoading ? "Reading live price…" : "0.30"}
@@ -164,7 +159,7 @@ const NewMarketPage = () => {
               setStrikeTouched(true);
             }}
           />
-          <p className="text-sm opacity-70 mt-1">
+          <p className="text-sm text-base-content/60 mt-2 mb-0">
             {currentPrice ? (
               <>Live Chainlink price: {formatPrice(currentPrice.normalized)}.</>
             ) : priceLoading ? (
@@ -183,13 +178,13 @@ const NewMarketPage = () => {
           <input
             id="expiry"
             type="datetime-local"
-            className="input input-bordered w-full"
+            className="input w-full"
             value={expiryValue}
             min={mounted && bounds ? toInputValue(bounds.min) : undefined}
             max={mounted && bounds ? toInputValue(bounds.max) : undefined}
             onChange={event => setExpiryInput(event.target.value)}
           />
-          <p className="text-sm opacity-70 mt-1">
+          <p className="text-sm text-base-content/60 mt-2 mb-0">
             {config ? (
               <>
                 Between {Number(config.minDuration) / 60} minutes and {Number(config.maxDuration) / 86400} days from
@@ -208,7 +203,7 @@ const NewMarketPage = () => {
           </label>
           <input
             id="value"
-            className="input input-bordered w-full font-editorial text-xl"
+            className="input w-full text-lg font-semibold tabular-nums"
             value={paymentValue}
             inputMode="decimal"
             placeholder={estimateLoading ? "Estimating…" : suggestedHbar}
@@ -217,7 +212,7 @@ const NewMarketPage = () => {
               setValueTouched(true);
             }}
           />
-          <p className="text-sm opacity-70 mt-1">
+          <p className="text-sm text-base-content/60 mt-2 mb-0">
             {hbarPerUsd !== undefined ? (
               <>
                 Covers two token creations at {hbarPerUsd.toFixed(2)} HBAR per $1, plus the settlement reserve. You can
@@ -229,7 +224,7 @@ const NewMarketPage = () => {
           </p>
         </div>
 
-        <button className="btn btn-primary w-full rounded-full" onClick={create} disabled={!canSubmit || isMining}>
+        <button className="btn btn-primary w-full" onClick={create} disabled={!canSubmit || isMining}>
           {isMining ? "Creating…" : "Create market"}
         </button>
       </div>

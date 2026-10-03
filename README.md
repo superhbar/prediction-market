@@ -179,7 +179,9 @@ packages/nextjs/
   app/markets/[id]/page.tsx         Market detail: pools, odds, countdowns, stake, settle, void, redeem
   app/portfolio/page.tsx            Positions across markets
   app/api/pyth/route.ts             Server-only Hermes proxy; PYTH_API_KEY never reaches the browser
-  components/markets/               MarketCard, StakePanel, RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States
+  components/markets/               MarketCard, StakePanel, RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, ui (shared badges and bars)
+  styles/globals.css                Both daisyUI themes and the YES/NO colors: the whole look in one file
+  utils/brand.ts                    App name, description and the theme colors that CSS cannot reach
   hooks/markets/                    useMarket, useMarkets, usePositions, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate, useMarketActivity
   hooks/scaffold-hbar/              Scaffold read, write, event, and transactor hooks
   utils/markets/units.ts            The single tinybar and weibar conversion boundary, plus frontend gas limits
@@ -227,6 +229,25 @@ Full lifecycle run with `yarn foundry:e2e:testnet` on 2026-10-02 against the dep
 | Self-booked retry, executed by the network, settled NO on Chainlink at $0.099035 | [schedule 0.0.10830705](https://hashscan.io/testnet/schedule/0.0.10830705) |
 | Redeem the winning NO position (8 HBAR) | [transaction](https://hashscan.io/testnet/transaction/0xbbcf415f91f45c307537acbeecba6795105502e5d15238d97a8fa09f941bb889) |
 | Creator withdraws the unused reserve | [transaction](https://hashscan.io/testnet/transaction/0x312ea637191036d60cf7823de275dd5bfe077471809bd279488920321bd4e04f) |
+
+## Make it yours
+
+The app is a working product, but every visual and naming decision sits in three files, so a fork can look like its own brand in minutes.
+
+| What | Where |
+|---|---|
+| Name, short name, description, logo letter | `packages/nextjs/utils/brand.ts` (`BRAND`), used by the header, page metadata, web app manifest and wallet modal |
+| Colors, radii, fonts | `packages/nextjs/styles/globals.css`: the dark `hedera` theme (default), the `hedera-light` theme, and the `--color-yes` / `--color-no` outcome colors in `@theme` |
+| Font families | `packages/nextjs/app/layout.tsx` (`next/font` Inter and JetBrains Mono); swap them and keep the CSS variable names |
+| Logo | `LogoMark` in `packages/nextjs/components/Header.tsx` |
+
+Components only use semantic classes (`bg-base-100`, `text-primary`, `bg-yes`, `text-no`, `.panel`), never raw hex values, so editing a theme recolors every page, including the price chart, which draws with `var(--color-primary)` and `var(--color-secondary)`. Shared market UI (asset badge, status pill, YES/NO bar) lives in `packages/nextjs/components/markets/ui.tsx`.
+
+Common changes:
+
+- New palette: change `--color-primary`, `--color-secondary` and the base colors in both themes, then the matching hex values in `BRAND`.
+- Light mode by default: set `defaultTheme="hedera-light"` on the `ThemeProvider` in `app/layout.tsx` and move `default: true` to the light theme in `globals.css`.
+- Other assets: add a feed (see Add a price feed below). The question wording comes from `marketQuestion` in `packages/nextjs/utils/markets/question.ts`.
 
 ## Extending the template
 
