@@ -89,6 +89,19 @@ export async function fetchAccount(mirrorBase: string, evmAddress: string): Prom
   return { maxAutomaticTokenAssociations: data.max_automatic_token_associations ?? 0 };
 }
 
+/**
+ * Whether an EVM address has a Hedera account yet. A fresh burner or wallet address only becomes an account
+ * when it first receives HBAR; until then the mirror node answers 404 and HTS balance reads revert.
+ */
+export async function fetchAccountExists(mirrorBase: string, evmAddress: string): Promise<boolean> {
+  const response = await fetch(`${mirrorBase}/api/v1/accounts/${evmAddress}`, {
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (response.status === 404) return false;
+  if (!response.ok) throw new Error(`Mirror node request failed: ${response.status}`);
+  return true;
+}
+
 /** True when the account already holds or is associated with the token. */
 export async function fetchIsTokenAssociated(
   mirrorBase: string,

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
+import { HederaPortalFaucet } from "@scaffold-hbar-ui/components";
 import { useAccount, useReadContracts } from "wagmi";
 import { EmptyState, ErrorState } from "~~/components/markets/States";
 import { AssetBadge } from "~~/components/markets/ui";
@@ -22,6 +23,7 @@ const PortfolioView = () => {
     positions,
     isLoading: positionsLoading,
     error: positionsError,
+    noAccount,
     refetch: refetchPositions,
   } = usePositions(account);
   const { markets, marketIds, isLoading: marketsLoading, error: marketsError } = useMarkets();
@@ -84,7 +86,16 @@ const PortfolioView = () => {
     <div className="shell page">
       <h1 className="text-2xl font-bold m-0">Portfolio</h1>
       <div className="mt-6">
-        {error ? (
+        {noAccount ? (
+          <div className="panel border-dashed p-10 text-center">
+            <p className="text-lg font-semibold m-0">This address is not a Hedera account yet</p>
+            <p className="text-sm text-base-content/60 mt-2 mb-5">
+              A new wallet or burner address becomes an account when it first receives HBAR. Send it testnet HBAR, for
+              example from the Hedera Portal faucet, and this page updates on its own.
+            </p>
+            <HederaPortalFaucet showIcon />
+          </div>
+        ) : error ? (
           <ErrorState
             message="Positions or payouts could not be loaded. Check your connection and retry."
             onRetry={retry}

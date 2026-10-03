@@ -6,7 +6,7 @@ Predera is a template for price prediction markets on Hedera. Someone opens a ma
 npm create scaffold-hbar@latest -- --template superhbar/prediction-market
 ```
 
-Live demo on Hedera testnet: [predera.vercel.app](https://predera.vercel.app). It reads the shipped deployment, so you can open a market's settlement timeline and activity log without installing anything. The built-in burner wallet works there too (testnet HBAR only).
+Live demo on Hedera testnet: [predera.vercel.app](https://predera.vercel.app). It reads the shipped deployment, so you can open a market's settlement timeline and activity log without installing anything. The built-in burner wallet works there too, on testnet only: a fresh burner address is not a Hedera account until it first receives HBAR, so send it testnet HBAR (the footer links the Portal faucet) before staking. Until then the portfolio says so instead of showing balances.
 
 ![Market 0 on testnet: the scheduled call found no Chainlink round, booked two retries on its own, and the second retry settled YES. Every step is in the activity panel with a Hashscan link](docs/screenshots/market-detail.png)
 
@@ -18,7 +18,7 @@ One contract, `PredictionMarkets.sol`, holds every market. It creates two HTS to
 
 The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (pool split, price chart, stake panel, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
 
-Around it: 104 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 238/238 lines, 89% branches), 58 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
+Around it: 104 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 238/238 lines, 89% branches), 61 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
 
 ## Quick start
 

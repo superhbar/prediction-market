@@ -4,6 +4,7 @@ import { useAccount } from "wagmi";
 import { useReadContracts } from "wagmi";
 import { ErrorState } from "~~/components/markets/States";
 import { erc20BalanceAbi } from "~~/hooks/markets/abis";
+import { useAccountExists } from "~~/hooks/markets/useAccountExists";
 import { useScaffoldReadContract, useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-hbar";
 import scaffoldConfig from "~~/scaffold.config";
 import { batchReadError } from "~~/utils/markets/readResults";
@@ -20,6 +21,9 @@ export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
   const { address: account } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const redeemable = market.state === MarketState.Settled || market.state === MarketState.Voided;
+  // HTS balance reads revert for an address with no Hedera account yet, so only read real accounts.
+  const accountExists = useAccountExists(account);
+  const readable = !!account && accountExists === true;
 
   const {
     data: balances,
@@ -28,7 +32,7 @@ export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
     refetch: refetchBalances,
   } = useReadContracts({
     contracts:
-      account && redeemable
+      readable && redeemable
         ? [market.yesToken, market.noToken].map(token => ({
             address: token,
             abi: erc20BalanceAbi,
@@ -37,7 +41,7 @@ export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
             chainId: targetNetwork.id,
           }))
         : [],
-    query: { enabled: !!account && redeemable, refetchInterval: scaffoldConfig.pollingInterval },
+    query: { enabled: readable && redeemable, refetchInterval: scaffoldConfig.pollingInterval },
   });
 
   const yesBalance = balances?.[0]?.status === "success" ? BigInt(balances[0].result as bigint) : 0n;
@@ -104,11 +108,17 @@ export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
     <div className="panel p-5">
       <p className="text-sm font-semibold text-base-content/70 m-0">Redeem</p>
       {!account && <p className="text-sm mt-2 text-base-content/60">Connect a wallet to see your balances.</p>}
-      {account && readError && <ErrorState message="Balances or payouts could not be read." onRetry={retry} />}
-      {account && balancesPending && !readError && (
+      {account && accountExists === false && (
+        <p className="text-sm mt-2 text-base-content/60">
+          This address is not a Hedera account yet, so it holds no position tokens. It becomes one when it first
+          receives HBAR.
+        </p>
+      )}
+      {readable && readError && <ErrorState message="Balances or payouts could not be read." onRetry={retry} />}
+      {readable && balancesPending && !readError && (
         <p className="text-sm mt-2 text-base-content/60">Loading balances…</p>
       )}
-      {account && !balancesPending && !readError && yesBalance === 0n && noBalance === 0n && (
+      {readable && !balancesPending && !readError && yesBalance === 0n && noBalance === 0n && (
         <p className="text-sm mt-2 text-base-content/60">No position tokens in this account.</p>
       )}
       {!readError && yesBalance > 0n && (

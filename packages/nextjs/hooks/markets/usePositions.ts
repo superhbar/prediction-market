@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { erc20BalanceAbi } from "./abis";
+import { useAccountExists } from "./useAccountExists";
 import { useMarkets } from "./useMarkets";
 import type { Address } from "viem";
 import { useReadContracts } from "wagmi";
@@ -17,16 +18,20 @@ export type Position = {
 
 /**
  * Reads balanceOf on every market's YES and NO position token for an
- * account, in one batch. Empty without an account.
+ * account, in one batch. Empty without an address, and empty (not an error) for an address
+ * that has no Hedera account yet, since HTS balance reads revert for those.
  */
 export function usePositions(account: Address | undefined): {
   positions: Position[];
   isLoading: boolean;
   error: Error | null;
+  /** True when the address has no Hedera account yet (for example a fresh, unfunded burner). */
+  noAccount: boolean;
   refetch: () => void;
 } {
   const { targetNetwork } = useTargetNetwork();
   const { marketIds, markets, isLoading: marketsLoading, error: marketsError, refetch: refetchMarkets } = useMarkets();
+  const accountExists = useAccountExists(account);
 
   // Only markets that loaded get balance reads, so results are paired with this list, never with
   // marketIds by position: a failed market read would otherwise shift every later market's balances.
@@ -40,7 +45,7 @@ export function usePositions(account: Address | undefined): {
   );
 
   const contracts = useMemo(() => {
-    if (!account) return [];
+    if (!account || accountExists !== true) return [];
     return loaded.flatMap(({ market }) =>
       [market.yesToken, market.noToken].map(token => ({
         address: token,
@@ -50,7 +55,7 @@ export function usePositions(account: Address | undefined): {
         chainId: targetNetwork.id,
       })),
     );
-  }, [account, loaded, targetNetwork.id]);
+  }, [account, accountExists, loaded, targetNetwork.id]);
 
   const {
     data: results,
@@ -76,11 +81,17 @@ export function usePositions(account: Address | undefined): {
     });
   }, [account, results, loaded]);
 
-  const error = account ? (marketsError ?? balancesError ?? batchReadError(results)) : null;
+  const noAccount = !!account && accountExists === false;
+  const error = account && !noAccount ? (marketsError ?? balancesError ?? batchReadError(results)) : null;
   return {
-    positions,
-    isLoading: !!account && !error && (marketsLoading || (loaded.length > 0 && isPending)),
+    positions: noAccount ? [] : positions,
+    isLoading:
+      !!account &&
+      !noAccount &&
+      !error &&
+      (accountExists === undefined || marketsLoading || (loaded.length > 0 && isPending)),
     error,
+    noAccount,
     refetch: () => {
       refetchMarkets();
       if (contracts.length > 0) void refetchBalances();
