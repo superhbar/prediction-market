@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-hbar/contract";
 const deployedContracts = {
   296: {
     PredictionMarkets: {
-      address: "0x9b2A89773908f5BaAabD8f496E7Cc4B8d8A4516E",
+      address: "0x1768f7133ccaa22D2DF9FFA1F8356118159E6ac7",
       abi: [
         {
           type: "constructor",
@@ -114,6 +114,35 @@ const deployedContracts = {
           outputs: [
             {
               name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "chainlinkSettlementRound",
+          inputs: [
+            {
+              name: "marketId",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "eligible",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "price",
+              type: "int256",
+              internalType: "int256",
+            },
+            {
+              name: "publishTime",
               type: "uint256",
               internalType: "uint256",
             },
@@ -776,6 +805,25 @@ const deployedContracts = {
         },
         {
           type: "event",
+          name: "SettlementRetryFailed",
+          inputs: [
+            {
+              name: "marketId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "responseCode",
+              type: "int64",
+              indexed: false,
+              internalType: "int64",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "SettlementRetryScheduled",
           inputs: [
             {
@@ -1056,7 +1104,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 41294157,
+      deployedOnBlock: 41298270,
     },
   },
 } as const;

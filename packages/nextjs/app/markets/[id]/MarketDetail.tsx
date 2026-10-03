@@ -14,6 +14,7 @@ import { useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarket } from "~~/hooks/markets/useMarket";
 import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
 import { useNow } from "~~/hooks/markets/useNow";
+import { useScaffoldReadContract } from "~~/hooks/scaffold-hbar";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
 import { deriveStatus, isRefund, resolutionLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
@@ -27,6 +28,12 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
   const feedLabel = market ? bytes32ToFeedKey(market.feedKey) : "HBAR/USD";
   const { points, isLoading: chartLoading, error: chartError } = useChainlinkHistory(feedLabel);
   const nowSec = useNow();
+  // Ask the contract which round settle() would use, so "Settle now" only appears when it would succeed.
+  const { data: settlementRound } = useScaffoldReadContract({
+    contractName: "PredictionMarkets",
+    functionName: "chainlinkSettlementRound",
+    args: [market ? BigInt(id) : undefined],
+  });
 
   if (isLoading) {
     return (
@@ -61,12 +68,7 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
   }
 
   const status = config ? deriveStatus(market, nowSec, config) : "open";
-  // A Chainlink round the contract can settle on: at or after expiry and within maxRoundLag of it.
-  const roundAvailable = points.some(
-    point =>
-      point.timestamp >= market.expiry &&
-      (config === undefined || point.timestamp <= market.expiry + config.maxRoundLag),
-  );
+  const roundAvailable = settlementRound?.[0] === true;
 
   return (
     <div className="shell page">
