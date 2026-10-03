@@ -103,7 +103,7 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
               status === "open" ? (
                 <Countdown targetSec={market.expiry} label="Closes in" />
               ) : market.state === MarketState.Open ? (
-                <span>Trading closed &middot; {statusLabel(status)}</span>
+                <span>Staking closed &middot; {statusLabel(status)}</span>
               ) : undefined
             }
           />
