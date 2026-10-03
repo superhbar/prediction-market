@@ -165,9 +165,12 @@ function SwapForm({
   const [amount, setAmount] = useState("1");
   const { writeContractAsync, isPending } = useWriteContract();
   const transact = useTransactor();
-  // A buy sends the token to the buyer, which fails when the account has no free association slot.
-  const { association, associate, isAssociating } = useTokenAssociation(token, mode === "buy");
-  const blockedByAssociation = mode === "buy" && association === "needs-association";
+  // A buy sends the token to the buyer, which fails when the account has no free association slot. The check runs
+  // in both modes, so switching to Buy never shows an answer from before a sell.
+  const { association, associate, isAssociating } = useTokenAssociation(token, true);
+  const blockedByAssociation = mode === "buy" && (association === "checking" || association === "needs-association");
+  const showAssociation =
+    mode === "buy" && (association === "needs-association" || association === "may-need-association");
 
   const amountValid = isPositiveDecimal(amount);
   // Position tokens and tinybar both have 8 decimals, so one parser serves both directions.
@@ -285,7 +288,14 @@ function SwapForm({
               : formatHbar(minimumOut(quoted))}
         </dd>
       </dl>
-      {blockedByAssociation && <AssociationPrompt side={side} onAssociate={associate} isAssociating={isAssociating} />}
+      {showAssociation && (
+        <AssociationPrompt
+          side={side}
+          required={association === "needs-association"}
+          onAssociate={associate}
+          isAssociating={isAssociating}
+        />
+      )}
       <button
         className="btn btn-primary w-full mt-4"
         disabled={!account || !amountValid || quoted === undefined || isPending || blockedByAssociation}

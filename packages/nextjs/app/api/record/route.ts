@@ -1,18 +1,30 @@
 import { NextResponse } from "next/server";
 import { TopicMessageSubmitTransaction } from "@hashgraph/sdk";
 import { fetchTopicMessages, hcsSettings, operatorClient } from "~~/utils/markets/hcs";
-import { type SettlementRecord, buildRecord, findRecord, isRecordable } from "~~/utils/markets/record";
+import {
+  type PublishedRecord,
+  type SettlementRecord,
+  buildRecord,
+  findRecord,
+  isRecordable,
+} from "~~/utils/markets/record";
 import { readMarkets } from "~~/utils/markets/serverReads";
 
-type Published = { record: SettlementRecord; sequenceNumber: number; transactionId: string };
+type PublishOutcome = {
+  record: PublishedRecord | { record: SettlementRecord; sequenceNumber: number; transactionId: string };
+  created: boolean;
+};
+
+class TopicTooLong extends Error {}
 
 /**
- * Publishes started or finished by this server instance, by chain, contract and market. Concurrent requests for one
- * market share a single submission, and a finished one answers repeat requests before the mirror node indexes
- * it. Separate instances can still both publish; readers take the first record by sequence number, so a
- * duplicate costs one message fee and changes nothing.
+ * Record jobs started or finished by this server instance, one per chain, contract and market (a few bytes each,
+ * bounded by the number of closed markets). Concurrent requests for one market share a single lookup and
+ * submission, and a finished one answers repeats before the mirror node indexes it. Separate instances can still
+ * both publish; readers take the first record by sequence number, so a duplicate costs one message fee and
+ * changes nothing.
  */
-const publishes = new Map<string, Promise<Published>>();
+const publishes = new Map<string, Promise<PublishOutcome>>();
 
 /** Reads `?marketId=` from a request, or null when it is not a non-negative integer. */
 function marketIdOf(value: string | null | undefined): number | null {
@@ -66,30 +78,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Only settled or voided markets are recorded." }, { status: 409 });
     }
     const key = `${chainId}:${contract.toLowerCase()}:${marketId}`;
+    // The lookup and the insert run with no await between them, so a concurrent request always finds the job.
     const pending = publishes.get(key);
-    if (pending) return NextResponse.json({ record: await pending, created: false });
-
-    const { messages, complete } = await fetchTopicMessages(chainId, topicId);
-    const existing = findRecord(messages, chainId, contract, marketId);
-    if (existing) return NextResponse.json({ record: existing, created: false });
-    // Not finding a record in a partly read topic proves nothing, so do not pay for a possible duplicate.
-    if (!complete) {
+    if (pending) return NextResponse.json({ record: (await pending).record, created: false });
+    const job = (async (): Promise<PublishOutcome> => {
+      const { messages, complete } = await fetchTopicMessages(chainId, topicId);
+      const existing = findRecord(messages, chainId, contract, marketId);
+      if (existing) return { record: existing, created: false };
+      // Not finding a record in a partly read topic proves nothing, so do not pay for a possible duplicate.
+      if (!complete) throw new TopicTooLong();
+      const record = buildRecord(chainId, contract, marketId, market, BigInt(Math.floor(Date.now() / 1000)), config);
+      const sent = await submit(chainId, topicId, operatorId, operatorKey, JSON.stringify(record));
+      return { record: { record, ...sent }, created: true };
+    })();
+    publishes.set(key, job);
+    // A failed lookup or submission must not block a later retry.
+    job.catch(() => publishes.delete(key));
+    return NextResponse.json(await job);
+  } catch (error) {
+    if (error instanceof TopicTooLong) {
       return NextResponse.json(
         { error: "The record topic is too long to check for an existing record." },
         { status: 503 },
       );
     }
-
-    const record = buildRecord(chainId, contract, marketId, market, BigInt(Math.floor(Date.now() / 1000)), config);
-    const publish = submit(chainId, topicId, operatorId, operatorKey, JSON.stringify(record)).then(sent => ({
-      record,
-      ...sent,
-    }));
-    publishes.set(key, publish);
-    // A failed submission must not block a later retry.
-    publish.catch(() => publishes.delete(key));
-    return NextResponse.json({ record: await publish, created: true });
-  } catch {
     return NextResponse.json({ error: "Could not publish the record." }, { status: 502 });
   }
 }

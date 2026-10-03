@@ -136,3 +136,17 @@ export async function fetchSchedule(mirrorBase: string, scheduleId: string): Pro
     return null;
   }
 }
+
+/**
+ * Whether an existing account can receive a token it may not hold yet.
+ * - `needs-association`: no automatic-association slots and not associated, so a transfer of the token fails.
+ * - `may-need-association`: a limited number of slots and not associated; the transfer fails once they are used.
+ *   The mirror node does not say how many are used.
+ * - `ok`: associated already, or unlimited slots (-1).
+ */
+export type TokenReceivable = "ok" | "may-need-association" | "needs-association";
+
+export function classifyAssociation(maxAutomaticTokenAssociations: number, associated: boolean): TokenReceivable {
+  if (associated || maxAutomaticTokenAssociations < 0) return "ok";
+  return maxAutomaticTokenAssociations === 0 ? "needs-association" : "may-need-association";
+}

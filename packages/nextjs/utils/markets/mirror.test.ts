@@ -1,4 +1,4 @@
-import { fetchAccountExists } from "./mirror";
+import { classifyAssociation, fetchAccountExists } from "./mirror";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const TESTNET = 296;
@@ -27,5 +27,24 @@ describe("fetchAccountExists", () => {
   it("throws when the lookup fails instead of reporting a missing account", async () => {
     mockResponse(502, { error: "Resolution failed" });
     await expect(fetchAccountExists(TESTNET, ADDRESS)).rejects.toThrow("502");
+  });
+});
+
+describe("classifyAssociation", () => {
+  it("is ok once associated, whatever the slots", () => {
+    expect(classifyAssociation(0, true)).toBe("ok");
+    expect(classifyAssociation(5, true)).toBe("ok");
+  });
+
+  it("is ok with unlimited automatic associations", () => {
+    expect(classifyAssociation(-1, false)).toBe("ok");
+  });
+
+  it("requires association with no slots", () => {
+    expect(classifyAssociation(0, false)).toBe("needs-association");
+  });
+
+  it("warns with limited slots, since the mirror node does not say how many are used", () => {
+    expect(classifyAssociation(10, false)).toBe("may-need-association");
   });
 });
