@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
+import { parseEventLogs } from "viem";
 import { usePublicClient } from "wagmi";
 import { useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useCreationEstimate } from "~~/hooks/markets/useCreationEstimate";
@@ -105,13 +106,15 @@ const NewMarketPage = () => {
       });
       let nextId: string | null = null;
       if (hash && publicClient && deployed) {
-        await publicClient.waitForTransactionReceipt({ hash });
-        const count = (await publicClient.readContract({
-          address: deployed.address,
+        // Take the id from this transaction's own MarketCreated log: marketCount() - 1 could be
+        // another creator's market if one landed in between.
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        const [created] = parseEventLogs({
           abi: deployed.abi,
-          functionName: "marketCount",
-        })) as bigint;
-        if (count > 0n) nextId = (count - 1n).toString();
+          eventName: "MarketCreated",
+          logs: receipt.logs.filter(log => log.address.toLowerCase() === deployed.address.toLowerCase()),
+        });
+        if (created) nextId = created.args.marketId.toString();
       }
       router.push(nextId === null ? "/" : `/markets/${nextId}`);
     } catch {

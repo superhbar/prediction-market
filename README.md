@@ -267,7 +267,7 @@ Full lifecycle run with `yarn foundry:e2e:testnet` on 2026-10-02 against the dep
 | `.harness/prds/01-market-activity.md` | The feature brief, including the mirror node facts the agent needs (filter logs by `topics[1]` on the client) |
 | `.harness/validators/static.json` | Tier 0: template shape, docs, forbidden env files, required feature files |
 | `.harness/validators/yarn.json` | Tier 1: install, lint, type-check, vitest, forge tests, production build |
-| `.harness/validators/playwright-smoke.yaml` | Tier 2: boots the app and loads every route with zero console errors |
+| `.harness/validators/playwright-smoke.yaml` | Tier 2: boots the app and loads `/`, `/markets/0`, `/markets/new`, `/portfolio` and a missing market with zero console errors. `/debug` is excluded: the upstream debug-contracts package calls CoinGecko itself |
 | `.harness/acceptance-contract.json` | Tier 3: five numbered assertions graded against market 0's real testnet history |
 
 Check the recipe and run the cheap tiers (no agent, no keys):
@@ -293,7 +293,7 @@ hedera-harness run
 - Run branch: [`harness/run-market-activity-674bcd`](https://github.com/superhbar/prediction-market/tree/harness/run-market-activity-674bcd), one commit per attempt.
 - The nested `claude` CLI was not logged in on the build machine, so the run used the recipe's `generator:` override: OpenCode wrote the first pass, then agy (Claude Sonnet 4.6) took over when OpenCode's free model hit its rate limit. Tier 3 grading needs the same agent CLI, so it was done by hand; the results are below.
 - Tier 3.5 provisioned a funded ephemeral account on every attempt and swept it back (for example `0.0.10831218`, `0.0.10831341`).
-- The run ended with type-check, build, lint, tests and the static checks green, and one Tier 2 failure that was not the agent's code: the header balance and the HBAR price fetched CoinGecko and a second mirror host, which failed to resolve on the build machine. Both were fixed on `main` (the app now reads only the testnet mirror and the relay), and `yarn harness:validate` passes there with Tier 2 green on all routes.
+- The run ended with type-check, build, lint, tests and the static checks green, and one Tier 2 failure that was not the agent's code: the header balance and the HBAR price fetched CoinGecko and a second mirror host, which failed to resolve on the build machine. Both were fixed on `main` (the app now reads only the testnet mirror and the relay), and `yarn harness:validate` passes there with Tier 2 green on every gated route (all except `/debug`, see above).
 - The generated decoder, hook, panel and 9 unit tests landed unchanged apart from one comment.
 
 Tier 3 acceptance contract, graded by hand on the production build:

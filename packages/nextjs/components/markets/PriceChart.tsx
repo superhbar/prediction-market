@@ -1,5 +1,5 @@
 import type { PricePoint } from "~~/hooks/markets/useChainlinkHistory";
-import { formatPrice } from "~~/utils/markets/units";
+import { formatExactPrice, formatPrice } from "~~/utils/markets/units";
 
 type PriceChartProps = {
   points: PricePoint[];
@@ -99,7 +99,7 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
           fontStyle="italic"
           fontFamily="Fraunces,serif"
         >
-          Strike {formatPrice(strike)}
+          Strike {formatExactPrice(strike)}
         </text>
         <path d={line} fill="none" stroke="currentColor" strokeWidth="2.5" opacity="0.9" />
         <circle cx={x(points.length - 1)} cy={lastY} r="5" fill="#8259ef" />
@@ -120,7 +120,7 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
       <div className="editorial-rule my-4" />
       <p className="font-editorial italic text-[15px] leading-relaxed m-0">
         {points.length} Chainlink rounds, latest <strong>{formatPrice(last.normalized)}</strong> against a strike of{" "}
-        <strong>{formatPrice(strike)}</strong>.
+        <strong>{formatExactPrice(strike)}</strong>.
       </p>
     </div>
   );

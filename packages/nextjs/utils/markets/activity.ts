@@ -1,7 +1,7 @@
 import { type MirrorContractLog } from "./mirror";
 import { outcomeLabel, sourceLabel } from "./status";
 import { MarketOutcome, PriceSource } from "./types";
-import { formatHbar, formatPrice } from "./units";
+import { formatExactPrice, formatHbar } from "./units";
 import { type Abi, decodeEventLog } from "viem";
 
 /** One decoded market history row, newest-first as returned by the mirror node. */
@@ -128,7 +128,7 @@ function toEntry(eventName: string, args: EventArgs, log: MirrorContractLog): Ac
       const priceTime = toBigInt(args.priceTime);
       return {
         kind: eventName,
-        label: `Settled ${outcomeLabel(outcome)} via ${sourceLabel(source)} at ${formatPrice(price)}`,
+        label: `Settled ${outcomeLabel(outcome)} via ${sourceLabel(source)} at ${formatExactPrice(price)}`,
         detail: `Read at ${formatUtc(priceTime)}`,
         ...base(log),
       };

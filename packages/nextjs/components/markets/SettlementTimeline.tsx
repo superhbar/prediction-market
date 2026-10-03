@@ -12,7 +12,7 @@ import { hashscanLink } from "~~/utils/markets/hashscan";
 import { shortExpiry } from "~~/utils/markets/question";
 import { deriveStatus, outcomeLabel, sourceLabel } from "~~/utils/markets/status";
 import { type Market, MarketState, PriceSource } from "~~/utils/markets/types";
-import { GAS, formatPrice } from "~~/utils/markets/units";
+import { GAS, formatExactPrice } from "~~/utils/markets/units";
 import { notification } from "~~/utils/scaffold-hbar";
 
 type SettlementTimelineProps = {
@@ -65,6 +65,8 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
 
   const status = config === undefined ? "awaiting-settlement" : deriveStatus(market, BigInt(nowSec), config);
   const expired = BigInt(nowSec) >= market.expiry;
+  // The contract opens the Pyth fallback only after maxRoundLag, and only when Chainlink has no eligible round.
+  const pythWindowOpen = config !== undefined && BigInt(nowSec) >= market.expiry + config.maxRoundLag;
   const isOpen = market.state === MarketState.Open;
   const isSettled = market.state === MarketState.Settled;
   const isVoided = market.state === MarketState.Voided;
@@ -162,7 +164,7 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
           }
         >
           {isSettled && market.source !== PriceSource.None
-            ? `${formatPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatPrice(market.strike)}.`
+            ? `${formatExactPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatExactPrice(market.strike)}.`
             : isSettled
               ? "No oracle read was needed. Every position redeems 1:1."
               : "A price published before expiry is never used, so nobody can trade on a price that is already known."}
@@ -185,7 +187,7 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
             : isSettled
               ? "Not needed."
               : config
-                ? `Anyone can settle with a Pyth price at or after expiry. After ${Number(config.gracePeriod) / 3600} hours unsettled, anyone can void the market.`
+                ? `If Chainlink has no round within ${Number(config.maxRoundLag) / 3600} hours of expiry, anyone can settle with the first Pyth price at or after expiry. After ${Number(config.gracePeriod) / 3600} hours unsettled, anyone can void the market.`
                 : "Checking the grace period…"}
         </Step>
       </ol>
@@ -197,14 +199,14 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
             {isMining ? "Settling…" : "Settle now"}
           </button>
         )}
-        {isOpen && expired && pythEnabled && (
+        {isOpen && pythWindowOpen && !roundAvailable && pythEnabled && (
           <button className="btn btn-sm btn-outline" onClick={settleWithPyth} disabled={!account || isMining}>
             Settle with Pyth
           </button>
         )}
-        {isOpen && expired && !pythEnabled && (
+        {isOpen && pythWindowOpen && !roundAvailable && !pythEnabled && (
           <p className="text-sm opacity-70 m-0 w-full">
-            Pyth fallback is not configured. Chainlink settlement and voiding still apply.
+            Pyth fallback is not configured. Voiding after the grace period still applies.
           </p>
         )}
         {isOpen && voidable && (

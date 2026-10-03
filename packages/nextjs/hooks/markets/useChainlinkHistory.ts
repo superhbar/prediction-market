@@ -25,9 +25,13 @@ type HistorySnapshot = {
   error: string | null;
 };
 
+/** How often the history is re-read, so new rounds (and "Settle now") appear without a reload. */
+const REFRESH_MS = 60_000;
+
 /**
  * Walks back at most 30 Chainlink rounds from latestRoundData, stopping at a
- * phase boundary (round id top 16 bits change) or a zero updatedAt.
+ * phase boundary (round id top 16 bits change) or a zero updatedAt. Re-reads every minute and keeps
+ * showing the previous rounds while a refresh is in flight.
  */
 export function useChainlinkHistory(feedLabel: string): {
   points: PricePoint[];
@@ -39,11 +43,13 @@ export function useChainlinkHistory(feedLabel: string): {
   const { targetNetwork } = useTargetNetwork();
   const { chainlink } = useFeedInfo(feedLabel);
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
-  const key = chainlink ?? "";
+  const [tick, setTick] = useState(0);
+  const base = chainlink && chainlink !== ZERO_ADDRESS ? `${targetNetwork.id}:${chainlink}` : "";
+  const key = base === "" ? "" : `${base}:${tick}`;
   const [snapshot, setSnapshot] = useState<HistorySnapshot>({ key: "", points: [], decimals: undefined, error: null });
 
   useEffect(() => {
-    if (!publicClient || !chainlink || chainlink === ZERO_ADDRESS || snapshot.key === key) return;
+    if (!publicClient || !chainlink || key === "" || snapshot.key === key) return;
     let cancelled = false;
     const load = async () => {
       try {
@@ -90,7 +96,12 @@ export function useChainlinkHistory(feedLabel: string): {
         }
       } catch {
         if (!cancelled) {
-          setSnapshot({ key, points: [], decimals: undefined, error: "Price history is unavailable." });
+          // A failed refresh keeps the rounds already shown; only a first load with nothing to show errors.
+          setSnapshot(previous =>
+            previous.key.startsWith(`${base}:`) && previous.points.length > 0
+              ? { ...previous, key }
+              : { key, points: [], decimals: undefined, error: "Price history is unavailable." },
+          );
         }
       }
     };
@@ -98,16 +109,23 @@ export function useChainlinkHistory(feedLabel: string): {
     return () => {
       cancelled = true;
     };
-  }, [publicClient, chainlink, key, snapshot.key]);
+  }, [publicClient, chainlink, key, base, snapshot.key]);
 
-  const ready = key !== "" && key !== ZERO_ADDRESS;
+  useEffect(() => {
+    if (base === "") return;
+    const timer = setInterval(() => setTick(count => count + 1), REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [base]);
+
   const current = snapshot.key === key;
-  const points = current ? snapshot.points : [];
+  // While a refresh is in flight, keep the previous rounds of the same feed on screen.
+  const sameFeed = base !== "" && snapshot.key.startsWith(`${base}:`);
+  const points = sameFeed ? snapshot.points : [];
   return {
     points,
-    decimals: current ? snapshot.decimals : undefined,
+    decimals: sameFeed ? snapshot.decimals : undefined,
     currentPrice: points.length > 0 ? points[points.length - 1] : undefined,
-    isLoading: ready && !current,
+    isLoading: base !== "" && !current && !sameFeed,
     error: current ? snapshot.error : null,
   };
 }

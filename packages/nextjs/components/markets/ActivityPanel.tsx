@@ -1,7 +1,7 @@
 "use client";
 
 import { useMarketActivity } from "~~/hooks/markets/useMarketActivity";
-import { useTargetNetwork } from "~~/hooks/scaffold-hbar";
+import { useDeployedContractInfo, useTargetNetwork } from "~~/hooks/scaffold-hbar";
 import { formatUtc } from "~~/utils/markets/activity";
 import { hashscanLink } from "~~/utils/markets/hashscan";
 
@@ -18,7 +18,9 @@ function shortAddress(address: string): string {
  */
 export function ActivityPanel({ marketId }: { marketId: string }) {
   const { targetNetwork } = useTargetNetwork();
-  const { entries, isLoading, error, refetch } = useMarketActivity(marketId);
+  const { data: contract } = useDeployedContractInfo({ contractName: "PredictionMarkets" });
+  const contractAddress = contract?.address;
+  const { entries, isLoading, truncated, error, refetch } = useMarketActivity(marketId);
 
   return (
     <div>
@@ -40,7 +42,7 @@ export function ActivityPanel({ marketId }: { marketId: string }) {
             Retry
           </button>
         </div>
-      ) : entries.length === 0 ? (
+      ) : entries.length === 0 && !truncated ? (
         <div className="border border-dashed border-base-300 p-6">
           <p className="font-editorial italic text-lg m-0">No activity yet</p>
           <p className="text-sm mt-1 opacity-70 m-0">Stakes, settlement and redemptions will appear here.</p>
@@ -66,6 +68,21 @@ export function ActivityPanel({ marketId }: { marketId: string }) {
             </li>
           ))}
         </ol>
+      )}
+      {truncated && !error && (
+        <p className="text-sm text-base-content/60 mt-3 mb-0">
+          Older events of this market are beyond the 2,000 most recent contract events and are not shown. The full
+          history is on{" "}
+          <a
+            href={hashscanLink(targetNetwork.id, "contract", contractAddress ?? "")}
+            target="_blank"
+            rel="noreferrer"
+            className="link"
+          >
+            Hashscan
+          </a>
+          .
+        </p>
       )}
     </div>
   );

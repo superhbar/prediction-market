@@ -83,6 +83,21 @@ export function formatPrice(price: bigint): string {
 }
 
 /**
+ * 1e18 fixed-point price to a USD string with every significant digit kept, padded to the same minimum
+ * decimals as formatPrice: "$0.1000", "$0.100049", "$90,000". Use it wherever a price decides an outcome
+ * (strikes, settlement prices), so a rounded label never contradicts the result.
+ */
+export function formatExactPrice(price: bigint): string {
+  const negative = price < 0n;
+  const [whole, fraction = ""] = formatUnits(negative ? -price : price, PRICE_DECIMALS).split(".");
+  const value = Number(whole);
+  const minDigits = value < 1 ? 4 : value < 10_000 ? 2 : 0;
+  const digits = fraction.length > minDigits ? fraction : fraction.padEnd(minDigits, "0");
+  const grouped = BigInt(whole).toLocaleString("en-US");
+  return `${negative ? "-" : ""}$${grouped}${digits ? `.${digits}` : ""}`;
+}
+
+/**
  * What a new stake would pay if its side wins and nobody else stakes: the whole pool, including this
  * stake, shared pro rata over the winning side. All amounts are tinybar.
  */

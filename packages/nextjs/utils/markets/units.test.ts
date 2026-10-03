@@ -1,5 +1,6 @@
 import {
   decimalToPrice,
+  formatExactPrice,
   formatHbar,
   formatPrice,
   hbarToTinybar,
@@ -54,6 +55,14 @@ describe("price conversions", () => {
     expect(formatPrice(300000000000000000n)).toBe("$0.3000");
     expect(formatPrice(2657850000000000000000n)).toBe("$2,657.85");
     expect(formatPrice(90000000000000000000000n)).toBe("$90,000");
+  });
+
+  it("keeps every significant digit for outcome-deciding prices", () => {
+    expect(formatExactPrice(100000000000000000n)).toBe("$0.1000");
+    expect(formatExactPrice(100049000000000000n)).toBe("$0.100049");
+    expect(formatExactPrice(2500500000000000000000n)).toBe("$2,500.50");
+    expect(formatExactPrice(90000000000000000000000n)).toBe("$90,000");
+    expect(formatExactPrice(90000250000000000000000n)).toBe("$90,000.25");
   });
 
   it("projects a stake's payout from the current pools", () => {

@@ -6,7 +6,7 @@ import { toEventSelector } from "viem";
 import { useDeployedContractInfo, useTargetNetwork } from "~~/hooks/scaffold-hbar";
 import { type ActivityEntry, decodeActivity } from "~~/utils/markets/activity";
 import { mirrorBaseForChain } from "~~/utils/markets/hashscan";
-import { fetchContractLogs } from "~~/utils/markets/mirror";
+import { type MirrorContractLog, fetchContractLogs } from "~~/utils/markets/mirror";
 
 const REFRESH_MS = 30_000;
 /** topic0 of MarketCreated, the oldest event of every market: paging stops once it is found. */
@@ -17,6 +17,8 @@ const MARKET_CREATED_TOPIC = toEventSelector(
 type ActivitySnapshot = {
   key: string;
   entries: ActivityEntry[];
+  /** The market's MarketCreated log was not within the pages read, so older events are missing. */
+  truncated: boolean;
   error: string | null;
 };
 
@@ -39,6 +41,7 @@ export function logMatchesMarket(topics: `0x${string}`[] | undefined, marketId: 
 export function useMarketActivity(marketId: string): {
   entries: ActivityEntry[];
   isLoading: boolean;
+  truncated: boolean;
   error: string | null;
   refetch: () => void;
 } {
@@ -58,12 +61,9 @@ export function useMarketActivity(marketId: string): {
   useEffect(() => {
     if (key === "" || !abi || !address || snapshot?.key === key) return;
     let cancelled = false;
-    fetchContractLogs(
-      mirrorBaseForChain(targetNetwork.id),
-      address,
-      20,
-      log => log.topics?.[0] === MARKET_CREATED_TOPIC && logMatchesMarket(log.topics, marketId),
-    )
+    const isCreation = (log: MirrorContractLog) =>
+      log.topics?.[0] === MARKET_CREATED_TOPIC && logMatchesMarket(log.topics, marketId);
+    fetchContractLogs(mirrorBaseForChain(targetNetwork.id), address, 20, isCreation)
       .then(logs => {
         if (cancelled) return;
         setSnapshot({
@@ -72,12 +72,13 @@ export function useMarketActivity(marketId: string): {
             logs.filter(log => logMatchesMarket(log.topics, marketId)),
             abi,
           ),
+          truncated: !logs.some(isCreation),
           error: null,
         });
       })
       .catch(() => {
         if (cancelled) return;
-        setSnapshot({ key, entries: [], error: "Activity is unavailable right now." });
+        setSnapshot({ key, entries: [], truncated: false, error: "Activity is unavailable right now." });
       });
     return () => {
       cancelled = true;
@@ -85,17 +86,19 @@ export function useMarketActivity(marketId: string): {
   }, [key, abi, address, marketId, targetNetwork.id, snapshot?.key]);
 
   useEffect(() => {
-    if (key === "") return;
+    if (base === "") return;
     const timer = setInterval(() => setNonce(count => count + 1), REFRESH_MS);
     return () => clearInterval(timer);
-  }, [key]);
+  }, [base]);
 
   const current = key !== "" && snapshot?.key === key;
   const previous = !current && snapshot !== null && base !== "" && snapshot.key.startsWith(`${base}:`);
   const entries = current ? (snapshot?.entries ?? []) : previous && snapshot ? snapshot.entries : [];
+  const shown = current ? snapshot : previous ? snapshot : null;
   return {
     entries,
     isLoading: key !== "" && !current,
+    truncated: shown?.truncated ?? false,
     error: current ? (snapshot?.error ?? null) : null,
     refetch,
   };

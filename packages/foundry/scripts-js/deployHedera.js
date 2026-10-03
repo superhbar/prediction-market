@@ -1,5 +1,7 @@
 /**
- * Deploys PredictionMarkets to Hedera testnet or mainnet with `cast send --create`.
+ * Deploys PredictionMarkets to Hedera testnet or mainnet: `cast send --create` with an encrypted
+ * keystore, or an in-process ethers signer when DEPLOYER_PRIVATE_KEY is set (automation, Harness), so a
+ * raw key is never passed on a command line where other processes could read it.
  *
  * Why not `forge script --broadcast`: Foundry 1.8 sends eth_getTransactionCount with an
  * EIP-1898 block object ({ blockHash }), which the Hashio JSON-RPC relay rejects with
@@ -13,6 +15,7 @@
  *   DEPLOYER_PRIVATE_KEY=0x... node scripts-js/deployHedera.js --network hedera_testnet
  */
 import { execFileSync } from "child_process";
+import { ethers } from "ethers";
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
@@ -79,13 +82,47 @@ function bytecode() {
   return artifact.bytecode.object;
 }
 
-function signerArgs() {
-  if (process.env.DEPLOYER_PRIVATE_KEY)
-    return ["--private-key", process.env.DEPLOYER_PRIVATE_KEY];
+/** Sends the creation transaction from DEPLOYER_PRIVATE_KEY in-process. Returns a cast-shaped receipt. */
+async function deployWithKey(network, initCode) {
+  const provider = new ethers.providers.JsonRpcProvider(
+    network.rpcUrl,
+    network.chainId,
+  );
+  const wallet = new ethers.Wallet(process.env.DEPLOYER_PRIVATE_KEY, provider);
+  const request = { data: initCode, type: 0 };
+  const gasLimit = (await wallet.estimateGas(request)).mul(12).div(10);
+  const tx = await wallet.sendTransaction({
+    ...request,
+    gasLimit,
+    gasPrice: await provider.getGasPrice(),
+  });
+  const receipt = await provider.waitForTransaction(tx.hash);
+  return {
+    status: receipt.status === 1 ? "0x1" : "0x0",
+    transactionHash: receipt.transactionHash,
+    contractAddress: receipt.contractAddress,
+    blockNumber: receipt.blockNumber,
+  };
+}
+
+/** Sends the creation transaction with `cast send` from an encrypted keystore account. */
+function deployWithKeystore(network, initCode) {
   const account = arg("account");
   if (!account)
     throw new Error("Pass --account <keystore> or set DEPLOYER_PRIVATE_KEY");
-  return ["--account", account];
+  return JSON.parse(
+    run("cast", [
+      "send",
+      "--rpc-url",
+      network.rpcUrl,
+      "--legacy",
+      "--json",
+      "--account",
+      account,
+      "--create",
+      initCode,
+    ]),
+  );
 }
 
 function writeRecords(network, receipt) {
@@ -125,7 +162,7 @@ function writeRecords(network, receipt) {
   );
 }
 
-function main() {
+async function main() {
   const network = NETWORKS[arg("network")];
   if (!network)
     throw new Error(
@@ -136,17 +173,9 @@ function main() {
   const initCode = bytecode() + constructorArgs(network.chainId).slice(2);
 
   console.log(`Deploying ${CONTRACT} to ${network.name}...`);
-  const out = run("cast", [
-    "send",
-    "--rpc-url",
-    network.rpcUrl,
-    "--legacy",
-    "--json",
-    ...signerArgs(),
-    "--create",
-    initCode,
-  ]);
-  const receipt = JSON.parse(out);
+  const receipt = process.env.DEPLOYER_PRIVATE_KEY
+    ? await deployWithKey(network, initCode)
+    : deployWithKeystore(network, initCode);
   if (receipt.status !== "0x1" || !receipt.contractAddress) {
     throw new Error(
       `Deployment failed: ${receipt.transactionHash ?? "no transaction hash"}`,
@@ -161,9 +190,7 @@ function main() {
   );
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   console.error(error.message);
   process.exit(1);
-}
+});

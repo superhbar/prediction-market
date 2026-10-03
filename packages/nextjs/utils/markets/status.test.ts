@@ -26,6 +26,7 @@ function market(overrides: Partial<Market>): Market {
     settlementTime: 0n,
     retriesLeft: 2,
     schedule: "0x0000000000000000000000000000000000000004",
+    schedulePending: true,
     ...overrides,
   };
 }

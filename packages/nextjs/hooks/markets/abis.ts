@@ -19,6 +19,7 @@ type RawMarket = {
   settlementTime: bigint;
   retriesLeft: number | bigint;
   schedule: Address;
+  schedulePending?: boolean;
 };
 
 /** Normalises a decoded getMarket result into the app Market record. */
@@ -40,6 +41,7 @@ export function toMarket(raw: RawMarket): Market {
     settlementTime: BigInt(raw.settlementTime),
     retriesLeft: Number(raw.retriesLeft),
     schedule: raw.schedule,
+    schedulePending: raw.schedulePending === true,
   };
 }
 

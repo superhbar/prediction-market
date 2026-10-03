@@ -24,19 +24,29 @@ export function usePositions(account: Address | undefined): {
   const { targetNetwork } = useTargetNetwork();
   const { marketIds, markets } = useMarkets();
 
+  // Only markets that loaded get balance reads, so results are paired with this list, never with
+  // marketIds by position: a failed market read would otherwise shift every later market's balances.
+  const loaded = useMemo(
+    () =>
+      marketIds.flatMap((id, index) => {
+        const market = markets[index];
+        return market ? [{ id, market }] : [];
+      }),
+    [marketIds, markets],
+  );
+
   const contracts = useMemo(() => {
     if (!account) return [];
-    return markets.flatMap(market => {
-      if (!market) return [];
-      return [market.yesToken, market.noToken].map(token => ({
+    return loaded.flatMap(({ market }) =>
+      [market.yesToken, market.noToken].map(token => ({
         address: token,
         abi: erc20BalanceAbi,
         functionName: "balanceOf" as const,
         args: [account] as const,
         chainId: targetNetwork.id,
-      }));
-    });
-  }, [account, markets, targetNetwork.id]);
+      })),
+    );
+  }, [account, loaded, targetNetwork.id]);
 
   const { data: results, isLoading } = useReadContracts({
     contracts,
@@ -45,9 +55,7 @@ export function usePositions(account: Address | undefined): {
 
   const positions = useMemo<Position[]>(() => {
     if (!account || !results) return [];
-    return marketIds.flatMap((id, index) => {
-      const market = markets[index];
-      if (!market) return [];
+    return loaded.flatMap(({ id }, index) => {
       const yes = results[index * 2];
       const no = results[index * 2 + 1];
       const yesBalance = yes?.status === "success" && yes.result !== undefined ? BigInt(yes.result as bigint) : 0n;
@@ -55,7 +63,7 @@ export function usePositions(account: Address | undefined): {
       if (yesBalance === 0n && noBalance === 0n) return [];
       return [{ marketId: id, yesBalance, noBalance }];
     });
-  }, [account, results, markets, marketIds]);
+  }, [account, results, loaded]);
 
   return { positions, isLoading: isLoading && contracts.length > 0 };
 }

@@ -1,4 +1,4 @@
-import { formatPrice } from "./units";
+import { formatExactPrice } from "./units";
 
 /** "Will HBAR/USD be at or above $0.1000 on Oct 20, 12:00 UTC?" */
 export function marketQuestion(feedLabel: string, strike: bigint, expirySec: bigint): string {
@@ -10,7 +10,7 @@ export function marketQuestion(feedLabel: string, strike: bigint, expirySec: big
     hour12: false,
     timeZone: "UTC",
   });
-  return `Will ${feedLabel} be at or above ${formatPrice(strike)} on ${day}, ${time} UTC?`;
+  return `Will ${feedLabel} be at or above ${formatExactPrice(strike)} on ${day}, ${time} UTC?`;
 }
 
 /** "Oct 20, 12:00 UTC" short expiry label for cards. */

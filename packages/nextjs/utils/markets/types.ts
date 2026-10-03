@@ -40,6 +40,8 @@ export type Market = {
   settlementTime: bigint;
   retriesLeft: number;
   schedule: Address;
+  /** A booked settlement schedule has not executed yet; withdrawReserve holds back its cost meanwhile. */
+  schedulePending: boolean;
 };
 
 /** Timing and reserve configuration read from the PredictionMarkets contract. */

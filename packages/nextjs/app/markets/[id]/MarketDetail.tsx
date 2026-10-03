@@ -17,7 +17,7 @@ import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
 import { deriveStatus, isRefund, resolutionLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
 import { type Market, MarketOutcome, MarketState } from "~~/utils/markets/types";
-import { formatPrice } from "~~/utils/markets/units";
+import { formatExactPrice } from "~~/utils/markets/units";
 
 /** Market detail in the editorial layout: headline, odds, chart, stake, settlement, redeem. */
 export function MarketDetail({ id }: { id: string }) {
@@ -49,7 +49,12 @@ export function MarketDetail({ id }: { id: string }) {
   }
 
   const status = config ? deriveStatus(market, nowSec, config) : "open";
-  const roundAvailable = points.some(point => point.timestamp >= market.expiry);
+  // A Chainlink round the contract can settle on: at or after expiry and within maxRoundLag of it.
+  const roundAvailable = points.some(
+    point =>
+      point.timestamp >= market.expiry &&
+      (config === undefined || point.timestamp <= market.expiry + config.maxRoundLag),
+  );
 
   return (
     <div className="max-w-[1200px] mx-auto px-6 w-full pb-16">
@@ -117,7 +122,7 @@ function Resolution({ market }: { market: Market }) {
           ? "No oracle price settled this market in time. Every position redeems 1:1 for the HBAR staked."
           : isRefund(market)
             ? "Only one side had stakes, so there was nothing to win. Every position redeems 1:1 for the HBAR staked."
-            : `${sourceLabel(market.source)} read ${formatPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatPrice(market.strike)}. Holders of the winning token redeem below.`}
+            : `${sourceLabel(market.source)} read ${formatExactPrice(market.settlementPrice)} at ${shortExpiry(market.settlementTime)}, against a strike of ${formatExactPrice(market.strike)}. Holders of the winning token redeem below.`}
       </p>
     </section>
   );
