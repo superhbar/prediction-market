@@ -17,4 +17,4 @@ Inside this package the same entry points are unprefixed (`yarn test`, `yarn dep
 ## Notes
 
 - Hedera deploys go through `scripts-js/deployHedera.js` (`cast send --create`), not `forge script --broadcast`. See the root README for why.
-- Live testnet deployment: `0x1768f7133ccaa22D2DF9FFA1F8356118159E6ac7`.
+- Live testnet deployment: `0x45F344b4ce70B90BDC6e439559e6160B23c5AcED`.

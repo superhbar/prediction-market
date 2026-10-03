@@ -219,9 +219,12 @@ yarn next:build
 
 ## Verified on testnet
 
-Live deployment: `PredictionMarkets` at `0x9b2A89773908f5BaAabD8f496E7Cc4B8d8A4516E` ([Hashscan](https://hashscan.io/testnet/contract/0x9b2A89773908f5BaAabD8f496E7Cc4B8d8A4516E)), source verified on Sourcify (exact match).
+Live deployment: `PredictionMarkets` at `0x45F344b4ce70B90BDC6e439559e6160B23c5AcED` ([Hashscan](https://hashscan.io/testnet/contract/0x45F344b4ce70B90BDC6e439559e6160B23c5AcED)), source verified on Sourcify (exact match). It checks for a settlement price 4 times after the first scheduled call, 30 minutes apart, and ships with 8 demo markets on HBAR, BTC and ETH.
 
-`yarn foundry:e2e:testnet` on 2026-10-03, market 0. The HBAR/USD testnet feed was quiet at expiry, so this run went through the retry path: the scheduled call found no Chainlink round, booked a retry, the retry booked another, and that one settled the market. Nobody but the network called `settle`.
+The settlement logic below was proven on the two previous deployments, which used a shorter retry schedule (3 retries, 15 minutes apart):
+
+- `0x1768f713...6ac7`, 2026-10-03: the HBAR/USD feed stayed quiet for 79 minutes after expiry, past the last retry. All three scheduled checks returned without reverting, then a manual `settle` closed the market YES once the round landed ([settlement](https://hashscan.io/testnet/transaction/0x52b2f2e9ec697b4f2e223e917bee70c4b8242b270fb3dea875ab9669bf6a6daa), [redeem](https://hashscan.io/testnet/transaction/0x1da9cc0361a83a53d2cf03d690ca679ce083617568bd2ef455eb7a00107b79db), [reserve withdrawal](https://hashscan.io/testnet/transaction/0xbc1aea6a8e4475437ecf5ad395f0bf300551346936d05b354fd88609273eab74)). That run is why the current deployment checks across the whole 2 hour window.
+- `0x9b2A8977...516E`, 2026-10-03, market 0: the scheduled call found no round, booked a retry, the retry booked another, and that one settled the market on its own:
 
 | Time (UTC) | Step | Evidence |
 |---|---|---|
