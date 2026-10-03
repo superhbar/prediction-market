@@ -4,8 +4,8 @@
  * manifest, the wallet modal and the route progress bar), so keep them in step with the themes.
  */
 export const BRAND = {
-  name: "Prediction Market",
-  shortName: "Predict",
+  name: "Predera",
+  shortName: "Predera",
   /** Letter on the header logo tile. Replace the LogoMark component in Header.tsx for a real logo. */
   logoLetter: "P",
   description:

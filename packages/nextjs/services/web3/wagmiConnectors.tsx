@@ -3,6 +3,7 @@ import { metaMaskWallet, walletConnectWallet } from "@rainbow-me/rainbowkit/wall
 import { rainbowkitBurnerWallet } from "burner-connector";
 import * as chains from "viem/chains";
 import scaffoldConfig from "~~/scaffold.config";
+import { BRAND } from "~~/utils/brand";
 
 const wallets = [metaMaskWallet, walletConnectWallet];
 
@@ -30,7 +31,7 @@ export const wagmiConnectors = () => {
   }
 
   return connectorsForWallets(walletGroups, {
-    appName: "scaffold-hbar",
+    appName: BRAND.name,
     projectId: scaffoldConfig.walletConnectProjectId,
   });
 };

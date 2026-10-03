@@ -1,4 +1,4 @@
-# Prediction Market (scaffold-hbar template)
+# Predera: prediction markets on Hedera (scaffold-hbar template)
 
 Binary price prediction markets on Hedera. Anyone creates a market (for example "HBAR/USD at or above $0.30 at expiry"), traders stake HBAR on YES or NO and receive HTS position tokens, and the market settles itself through a scheduled contract call that reads a Chainlink feed. A Pyth fallback and a void path cover the failure cases. No keeper bot, no cron job.
 
