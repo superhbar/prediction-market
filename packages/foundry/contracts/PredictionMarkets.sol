@@ -212,6 +212,10 @@ contract PredictionMarkets is ReentrancyGuard {
     /// @notice The last scheduled settlement found no eligible round and could not book another retry.
     ///         The market stays Open: anyone can settle once a round lands, use Pyth, or void after grace.
     event SettlementRetriesExhausted(uint256 indexed marketId);
+    /// @notice A scheduled settlement could not book its retry. The execution charge is kept, pending is
+    ///         cleared, retries are unchanged, and no retry fee is taken. A response code of 0 means the
+    ///         Schedule Service call itself reverted or returned malformed data (sentinel, not an HSS code).
+    event SettlementRetryFailed(uint256 indexed marketId, int64 responseCode);
     /// @notice Emitted when a market settles with its outcome, normalized price and source.
     event MarketSettled(uint256 indexed marketId, Outcome outcome, int256 price, uint256 priceTime, PriceSource source);
     /// @notice Emitted when a market is voided after the grace period.
@@ -322,48 +326,62 @@ contract PredictionMarkets is ReentrancyGuard {
     }
 
     /// @notice Settles an expired market on the first Chainlink round at or after expiry.
-    /// @dev Callable by the scheduled call or permissionlessly. A scheduled call with no round yet
-    ///      books a retry from the reserve, or emits SettlementRetriesExhausted when it cannot, and never
-    ///      reverts; anyone else reverts NoEligibleRound.
+    /// @dev Callable by the scheduled call or permissionlessly. A scheduled call never reverts on handled
+    ///      application paths: closed markets, early or unknown ids, missing rounds, unreadable feeds, and
+    ///      failed retry bookings return after keeping the execution charge and clearing pending. Unknown
+    ///      ids return without accounting changes because no market exists to charge.
+    ///      Anyone else reverts NoEligibleRound when no round qualifies.
     /// @param marketId The market to settle.
     function settle(uint256 marketId) external {
+        bool isScheduled = msg.sender == address(this);
+        if (isScheduled && marketId >= _marketCount) return;
         Market storage m = _getMarket(marketId);
-        if (msg.sender == address(this)) {
+        if (isScheduled) {
             // The network bills each scheduled execution to this contract, so charge it to the market's
             // reserve rather than to the shared balance that backs every pool. A schedule that fires after
             // someone settled the market by hand returns quietly: reverting would still be billed.
             m.schedulePending = false;
             _chargeReserve(m, SCHEDULED_EXECUTION_COST);
             if (m.state != State.Open) return;
-        } else if (m.state != State.Open) {
-            revert MarketNotOpen();
+            // forge-lint: disable-next-line(block-timestamp)
+            if (block.timestamp < m.expiry) return;
+        } else {
+            if (m.state != State.Open) revert MarketNotOpen();
+            // forge-lint: disable-next-line(block-timestamp)
+            if (block.timestamp < m.expiry) revert NotExpired();
         }
-        // forge-lint: disable-next-line(block-timestamp)
-        if (block.timestamp < m.expiry) revert NotExpired();
 
         if (m.yesPool == 0 || m.noPool == 0) {
             _finalize(m, marketId, Outcome.Invalid, 0, 0, PriceSource.None);
             return;
         }
 
-        (bool found, int256 price, uint256 priceTime) = _firstRoundAtOrAfter(m.feedKey, m.expiry);
-        if (!found || priceTime > uint256(m.expiry) + maxRoundLag) {
-            if (msg.sender == address(this) && m.retriesLeft > 0 && m.reserve >= retryCostEstimate) {
+        (bool eligible, int256 price, uint256 priceTime) = _eligibleChainlinkRound(m.feedKey, m.expiry);
+        if (!eligible) {
+            // forge-lint: disable-next-line(block-timestamp)
+            if (
+                isScheduled && m.retriesLeft > 0 && m.reserve >= retryCostEstimate
+                    && block.timestamp <= type(uint256).max - retryDelay
+            ) {
+                // forge-lint: disable-next-line(block-timestamp)
                 uint256 retryAt = block.timestamp + retryDelay;
-                (int64 rc, address schedule) =
-                    HSS.scheduleCall(address(this), retryAt, SETTLE_GAS, 0, abi.encodeCall(this.settle, (marketId)));
-                if (rc != SUCCESS) revert ScheduleFailed(rc);
+                (int64 retryRc, address retrySchedule) = _scheduleCall(marketId, retryAt);
+                if (retryRc != SUCCESS) {
+                    // forge-lint: disable-next-line(reentrancy-events)
+                    emit SettlementRetryFailed(marketId, retryRc);
+                    return;
+                }
                 m.retriesLeft -= 1;
                 _chargeReserve(m, retryCostEstimate);
-                m.schedule = schedule;
+                m.schedule = retrySchedule;
                 m.schedulePending = true;
                 // forge-lint: disable-next-line(reentrancy-events)
-                emit SettlementRetryScheduled(marketId, schedule, retryAt, m.retriesLeft);
+                emit SettlementRetryScheduled(marketId, retrySchedule, retryAt, m.retriesLeft);
                 return;
             }
             // A scheduled call must not revert here: the revert would undo the reserve charge and the
             // schedulePending reset while the network still bills the contract for the execution.
-            if (msg.sender == address(this)) {
+            if (isScheduled) {
                 // forge-lint: disable-next-line(reentrancy-events)
                 emit SettlementRetriesExhausted(marketId);
                 return;
@@ -399,8 +417,8 @@ contract PredictionMarkets is ReentrancyGuard {
 
         // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp < uint256(m.expiry) + maxRoundLag) revert PythFallbackNotOpen();
-        (bool chainlinkFound,, uint256 chainlinkTime) = _firstRoundAtOrAfter(m.feedKey, m.expiry);
-        if (chainlinkFound && chainlinkTime <= uint256(m.expiry) + maxRoundLag) revert ChainlinkRoundAvailable();
+        (bool chainlinkEligible,,) = _eligibleChainlinkRound(m.feedKey, m.expiry);
+        if (chainlinkEligible) revert ChainlinkRoundAvailable();
 
         uint256 fee = IPyth(pyth).getUpdateFee(updateData);
         if (msg.value < fee) revert PythFeeInsufficient(msg.value, fee);
@@ -553,8 +571,7 @@ contract PredictionMarkets is ReentrancyGuard {
     /// @return schedule The schedule address returned by the Schedule Service.
     function _bookSettlement(uint256 marketId, uint256 settleAt) internal returns (address schedule) {
         if (!HSS.hasScheduleCapacity(settleAt, SETTLE_GAS)) revert NoScheduleCapacity();
-        (int64 rc, address scheduledAt) =
-            HSS.scheduleCall(address(this), settleAt, SETTLE_GAS, 0, abi.encodeCall(this.settle, (marketId)));
+        (int64 rc, address scheduledAt) = _scheduleCall(marketId, settleAt);
         if (rc != SUCCESS) revert ScheduleFailed(rc);
         return scheduledAt;
     }
@@ -591,12 +608,49 @@ contract PredictionMarkets is ReentrancyGuard {
         return created;
     }
 
+    /// @notice Returns the provably first eligible Chainlink round for a market, if one exists.
+    /// @dev Shared by settle, settleWithPyth precedence, and off-chain readers. The view covers round
+    ///      eligibility only (proven first within the phase and inside maxRoundLag). Other settle
+    ///      preconditions still apply: the market must be Open and past expiry. One-sided markets settle
+    ///      Invalid without consulting the oracle.
+    /// @param marketId The market to check. Reverts InvalidMarketId for an unknown id.
+    /// @return eligible Whether a provably first round inside maxRoundLag exists.
+    /// @return price The round price normalized to 1e18, zero when not eligible.
+    /// @return publishTime The round updatedAt timestamp, zero when not eligible.
+    function chainlinkSettlementRound(uint256 marketId)
+        external
+        view
+        returns (bool eligible, int256 price, uint256 publishTime)
+    {
+        Market storage m = _getMarket(marketId);
+        return _eligibleChainlinkRound(m.feedKey, m.expiry);
+    }
+
+    /// @notice Finds the first eligible Chainlink round inside maxRoundLag, shared by settle and Pyth precedence.
+    /// @return eligible Whether a provably first round at or after expiry inside maxRoundLag exists.
+    /// @return price The round price normalized to 1e18.
+    /// @return priceTime The round updatedAt timestamp.
+    function _eligibleChainlinkRound(bytes32 feedKey, uint64 expiry)
+        internal
+        view
+        returns (bool eligible, int256 price, uint256 priceTime)
+    {
+        (bool found, int256 rawPrice, uint256 rawTime) = _firstRoundAtOrAfter(feedKey, expiry);
+        if (!found || rawTime > uint256(expiry) + maxRoundLag) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0, 0);
+        }
+        return (true, rawPrice, rawTime);
+    }
+
     /// @notice Finds the first Chainlink round with updatedAt >= expiry, walking back from latest.
     /// @dev A candidate is only returned once it is PROVEN first: the walk must reach an earlier round of the
     ///      same phase with updatedAt < expiry. Rounds with a non-positive answer are skipped (not a price).
     ///      Anything that stops the walk without that proof (48-step bound, phase boundary, first round of a
-    ///      phase, a reverting or empty round) returns not found, so the market falls back to a retry, Pyth
-    ///      or voiding instead of settling on a round that may not be the first.
+    ///      phase, a reverting, malformed, or empty round) returns not found, so the market falls back to a
+    ///      retry, Pyth or voiding instead of settling on a round that may not be the first. Reverting and
+    ///      malformed oracle responses are treated as not found, never as a revert. A response whose reported
+    ///      round id differs from the queried id is malformed. Normalization overflow is treated as not found.
     /// @return found Whether a provably first round exists.
     /// @return price The round price normalized to 1e18.
     /// @return priceTime The round updatedAt timestamp.
@@ -605,11 +659,12 @@ contract PredictionMarkets is ReentrancyGuard {
         view
         returns (bool found, int256 price, uint256 priceTime)
     {
-        IAggregatorV3 feed = IAggregatorV3(feeds[feedKey].chainlink);
-        // The candidate is the earliest valid (positive) round at or after expiry seen so far; a
-        // non-positive candidateAnswer means none has been seen yet.
-        // forge-lint: disable-next-line(unused-return)
-        (uint80 cursor, int256 candidateAnswer,, uint256 candidateTime,) = feed.latestRoundData();
+        address feed = feeds[feedKey].chainlink;
+        (bool latestOk, uint80 cursor, int256 candidateAnswer, uint256 candidateTime) = _readRound(feed, 0);
+        if (!latestOk) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0, 0);
+        }
         if (candidateTime < expiry || candidateTime == 0) {
             // forge-lint: disable-next-line(boolean-cst)
             return (false, 0, 0);
@@ -619,33 +674,147 @@ contract PredictionMarkets is ReentrancyGuard {
             // forge-lint: disable-next-line(unsafe-typecast)
             if (uint64(cursor) <= 1) break;
             // forge-lint: disable-next-line(calls-loop)
-            try feed.getRoundData(cursor - 1) returns (
-                uint80 prevRoundId,
-                int256 prevAnswer,
-                uint256, /*startedAt*/
-                uint256 prevUpdatedAt,
-                uint80 /*answeredInRound*/
-            ) {
-                if ((prevRoundId >> 64) != (cursor >> 64) || prevUpdatedAt == 0) break;
-                if (prevUpdatedAt < expiry) {
-                    found = candidateAnswer > 0;
-                    break;
-                }
-                cursor = prevRoundId;
-                if (prevAnswer > 0) {
-                    candidateAnswer = prevAnswer;
-                    candidateTime = prevUpdatedAt;
-                }
-            } catch {
+            (bool prevOk, uint80 prevRoundId, int256 prevAnswer, uint256 prevUpdatedAt) = _readRound(feed, cursor - 1);
+            if (!prevOk) break;
+            if ((prevRoundId >> 64) != (cursor >> 64) || prevUpdatedAt == 0) break;
+            if (prevUpdatedAt < expiry) {
+                found = true;
                 break;
+            }
+            cursor = prevRoundId;
+            if (prevAnswer > 0) {
+                candidateAnswer = prevAnswer;
+                candidateTime = prevUpdatedAt;
             }
         }
         if (!found) {
             // forge-lint: disable-next-line(boolean-cst)
             return (false, 0, 0);
         }
-        price = PriceMath.normalizeChainlink(candidateAnswer, feed.decimals());
+        (bool normOk, int256 normPrice) = _tryNormalizeChainlink(feed, candidateAnswer);
+        if (!normOk) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0, 0);
+        }
+        price = normPrice;
         priceTime = candidateTime;
+    }
+
+    /// @notice Reads feed decimals, treating reverting and malformed responses as not found.
+    function _feedDecimals(address feed) internal view returns (bool ok, uint8 dec) {
+        bytes memory request = abi.encodeWithSelector(IAggregatorV3.decimals.selector);
+        bool success;
+        uint256 size;
+        uint256 word;
+        // Copy only the fixed ABI result, so oversized return data cannot force memory allocation.
+        assembly ("memory-safe") {
+            let output := mload(0x40)
+            success := staticcall(gas(), feed, add(request, 32), mload(request), output, 32)
+            size := returndatasize()
+            word := mload(output)
+        }
+        if (!success || size < 32) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0);
+        }
+        if (word > type(uint8).max) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0);
+        }
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return (true, uint8(word));
+    }
+
+    /// @notice Reads a Chainlink round, treating reverting, malformed, and id-mismatched data as not found.
+    /// @dev A query of zero reads latestRoundData; predecessor queries are always nonzero. Requires a full
+    ///      160 byte payload and clean uint80 fields. StartedAt is ignored.
+    function _readRound(address feed, uint80 query)
+        internal
+        view
+        returns (bool ok, uint80 roundId, int256 answer, uint256 updatedAt)
+    {
+        bytes memory request = query == 0
+            ? abi.encodeWithSelector(IAggregatorV3.latestRoundData.selector)
+            : abi.encodeWithSelector(IAggregatorV3.getRoundData.selector, query);
+        bool success;
+        uint256 size;
+        uint256[5] memory words;
+        assembly ("memory-safe") {
+            success := staticcall(gas(), feed, add(request, 32), mload(request), words, 160)
+            size := returndatasize()
+        }
+        if (!success || size < 160) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0, 0, 0);
+        }
+        if (words[0] > type(uint80).max || words[4] > type(uint80).max) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0, 0, 0);
+        }
+        if (query != 0 && words[0] != query) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0, 0, 0);
+        }
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return (true, uint80(words[0]), int256(words[1]), words[3]);
+    }
+
+    /// @notice Normalizes a Chainlink answer without panicking on extreme answers or decimals.
+    /// @return ok False when the answer is not positive, decimals are unreadable, or the scale cannot
+    ///         fit in int256. Callers treat false as no eligible round.
+    function _tryNormalizeChainlink(address feed, int256 answer) internal view returns (bool ok, int256 price) {
+        if (answer <= 0) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0);
+        }
+        (bool decOk, uint8 feedDecimals) = _feedDecimals(feed);
+        if (!decOk) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0);
+        }
+        if (feedDecimals <= 18) {
+            // forge-lint: disable-next-line(unsafe-typecast)
+            int256 multiplier = int256(10 ** uint256(18 - feedDecimals));
+            if (answer > type(int256).max / multiplier) {
+                // forge-lint: disable-next-line(boolean-cst)
+                return (false, 0);
+            }
+            return (true, answer * multiplier);
+        }
+        // 10**77 exceeds int256.max, and higher powers can overflow uint256 as well.
+        if (feedDecimals > 94) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0);
+        }
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return (true, answer / int256(10 ** uint256(feedDecimals - 18)));
+    }
+
+    /// @notice Books a settlement call, mapping reverting or malformed HSS responses to a failure code.
+    /// @dev A return of (0, address(0)) means the Schedule Service call reverted or returned data
+    ///      too short or dirty to decode. Creation reverts on failure; retries emit SettlementRetryFailed.
+    function _scheduleCall(uint256 marketId, uint256 retryAt) internal returns (int64 rc, address retrySchedule) {
+        bytes memory req = abi.encodeCall(
+            IHederaScheduleService.scheduleCall,
+            (address(this), retryAt, SETTLE_GAS, uint64(0), abi.encodeCall(this.settle, (marketId)))
+        );
+        bool success;
+        uint256 size;
+        int256 rawRc;
+        uint256 rawSched;
+        assembly ("memory-safe") {
+            let output := mload(0x40)
+            success := call(gas(), 0x16b, 0, add(req, 32), mload(req), output, 64)
+            size := returndatasize()
+            rawRc := mload(output)
+            rawSched := mload(add(output, 32))
+        }
+        if (!success || size < 64) return (0, address(0));
+        if (rawRc < type(int64).min || rawRc > type(int64).max || rawSched > type(uint160).max) {
+            return (0, address(0));
+        }
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return (int64(rawRc), address(uint160(rawSched)));
     }
 
     /// @notice Deducts an estimated network cost from a market's reserve, saturating at zero.
