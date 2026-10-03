@@ -17,7 +17,7 @@ More screenshots: [an open market with the payout preview](docs/screenshots/mark
 - Chainlink push settlement plus Pyth pull fallback: settlement uses the first oracle price at or after expiry, never a cherry-picked price.
 - HTS position tokens: one fungible token per side per market (8 decimals), minted 1:1 per staked tinybar, redeemed by wipe (no approve step).
 - Frontend pages: market list with filters, create form with live Chainlink strike default, market detail (pools, odds, countdowns, stake, settle, void, redeem), portfolio, and the scaffold Debug Contracts page.
-- Tests: 88 Foundry unit tests with mocked HTS and Schedule Service (100% line coverage, mutation-checked), plus 41 vitest tests for units, feeds, status, activity decoding and Hashscan helpers.
+- Tests: 88 Foundry unit tests with mocked HTS and Schedule Service (100% line coverage, mutation-checked), plus 44 vitest tests for units, feeds, status, activity decoding and Hashscan helpers.
 - E2E script: full lifecycle on real testnet (create, stake both sides, scheduled settle, redeem, reserve withdraw) that prints Hashscan links.
 - Harness recipe: `.harness/` holds a spec, PRDs, and validators so Hedera Harness can build features against the same gate.
 

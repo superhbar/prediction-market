@@ -9,12 +9,12 @@ type CountdownProps = {
   label: string;
 };
 
-/** Live countdown to a unix timestamp, ticking every 30 seconds. */
+/** Live countdown to a unix timestamp, ticking every second. */
 export function Countdown({ targetSec, label }: CountdownProps) {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -23,7 +23,10 @@ export function Countdown({ targetSec, label }: CountdownProps) {
 
   return (
     <span className="whitespace-nowrap">
-      {label} <strong className="font-semibold text-base-content tabular-nums">{text}</strong>
+      {label} {/* Server and client render different seconds; the client value wins on the first tick. */}
+      <strong className="font-semibold text-base-content tabular-nums" suppressHydrationWarning>
+        {text}
+      </strong>
     </span>
   );
 }

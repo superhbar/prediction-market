@@ -28,12 +28,15 @@ export function shortExpiry(expirySec: bigint): string {
 
 /** "2d 14h 03m" countdown from a millisecond delta. Past times read "0m". */
 export function formatCountdown(deltaMs: number): string {
-  if (deltaMs <= 0) return "0m";
-  const totalMinutes = Math.floor(deltaMs / 60_000);
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-  if (days > 0) return `${days}d ${hours}h ${String(minutes).padStart(2, "0")}m`;
-  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
-  return `${minutes}m`;
+  if (deltaMs <= 0) return "0s";
+  const totalSeconds = Math.floor(deltaMs / 1000);
+  const days = Math.floor(totalSeconds / 86_400);
+  const hours = Math.floor((totalSeconds % 86_400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  const mm = String(minutes).padStart(2, "0");
+  if (days > 0) return `${days}d ${hours}h ${mm}m ${seconds}s`;
+  if (hours > 0) return `${hours}h ${mm}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${totalSeconds}s`;
 }
