@@ -1,6 +1,6 @@
 # AGENTS.md: Predera (prediction-market template)
 
-Scaffold-hbar template: oracle-settled binary prediction markets on Hedera. Foundry only, Next.js App Router, RainbowKit/wagmi/viem, DaisyUI. Live testnet deployment at `0x0cc41d2215C6e66caFF2C996b7FEEC162111B3d2`; frontend bindings ship pointing at it.
+Scaffold-hbar template: oracle-settled binary prediction markets on Hedera. Foundry only, Next.js App Router, RainbowKit/wagmi/viem, DaisyUI. Live testnet deployment at `0x9b2A89773908f5BaAabD8f496E7Cc4B8d8A4516E`; frontend bindings ship pointing at it.
 
 ## Commands
 

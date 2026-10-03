@@ -1,25 +1,22 @@
 # Predera: prediction markets on Hedera (scaffold-hbar template)
 
-Binary price prediction markets on Hedera. Anyone creates a market (for example "HBAR/USD at or above $0.30 at expiry"), traders stake HBAR on YES or NO and receive HTS position tokens, and the market settles itself through a scheduled contract call that reads a Chainlink feed. A Pyth fallback and a void path cover the failure cases. No keeper bot, no cron job.
+Predera is a template for price prediction markets on Hedera. Someone opens a market such as "Will HBAR/USD be at or above $0.10 on Nov 1?", people stake HBAR on YES or NO and get HTS tokens for their side, and the market settles itself: at creation the contract books its own `settle` call with Hedera's Schedule Service, and the network runs it after expiry against a Chainlink feed. If the feed is late, the contract books retries; after that anyone can settle by hand, use Pyth, or void the market for refunds. There is no keeper bot and no admin key.
 
 ```bash
 npm create scaffold-hbar@latest -- --template superhbar/prediction-market
 ```
 
-![A settled market on Hedera testnet: the scheduled call booked one retry, then settled NO on Chainlink, and every step is in the activity panel with a Hashscan link](docs/screenshots/market-detail.png)
+![Market 0 on testnet: the scheduled call found no Chainlink round, booked two retries on its own, and the second retry settled YES. Every step is in the activity panel with a Hashscan link](docs/screenshots/market-detail.png)
 
 More screenshots: [an open market with the payout preview](docs/screenshots/market-open.png), [market list](docs/screenshots/markets.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [light theme](docs/screenshots/market-detail-light.png). All are taken from the production build against the live testnet deployment.
 
-## What you get
+## What's in it
 
-- `PredictionMarkets` contract: one contract holds every market and acts as treasury, supply key, and wipe key for all position tokens.
-- HIP-1215 self-settlement: each market books its own `settle(marketId)` call on the Hedera Schedule Service (system contract `0x16b`) at creation, with self-booked retries.
-- Chainlink push settlement plus Pyth pull fallback: settlement uses the first oracle price at or after expiry, never a cherry-picked price.
-- HTS position tokens: one fungible token per side per market (8 decimals), minted 1:1 per staked tinybar, redeemed by wipe (no approve step).
-- Frontend pages: market list with filters, create form with live Chainlink strike default, market detail (pools, odds, countdowns, stake, settle, void, redeem), portfolio, and the scaffold Debug Contracts page.
-- Tests: 89 Foundry unit tests with mocked HTS and Schedule Service (100% line coverage, mutation-checked), plus 45 vitest tests for units, feeds, status, activity decoding and Hashscan helpers.
-- E2E script: full lifecycle on real testnet (create, stake both sides, scheduled settle, redeem, reserve withdraw) that prints Hashscan links.
-- Harness recipe: `.harness/` holds a spec, PRDs, and validators so Hedera Harness can build features against the same gate.
+One contract, `PredictionMarkets.sol`, holds every market. It creates two HTS tokens per market (YES and NO) and keeps the treasury, supply and wipe keys for them, so staking mints tokens and redeeming wipes them without an approve step. It books settlement through the Schedule Service at `0x16b` (HIP-1215) and settles on the first oracle price published at or after expiry, so nobody can bet on a price that is already known.
+
+The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (odds, price chart, buy panel, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
+
+Around it: 89 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage), 45 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
 
 ## Quick start
 
@@ -37,7 +34,7 @@ yarn install
 yarn next:dev
 ```
 
-Open http://localhost:3000. The frontend bindings in `packages/nextjs/contracts/deployedContracts.ts` already point at the live testnet deployment, so the app works before you deploy anything. Market 0 shows a finished lifecycle (settled NO after one self-booked retry). Markets 1, 2 and 3 (HBAR, BTC and ETH) stay open until 1 November, 31 October and 16 October 2026, so you can stake on them straight away.
+Open http://localhost:3000. The frontend bindings in `packages/nextjs/contracts/deployedContracts.ts` already point at the live testnet deployment, so the app works before you deploy anything. Market 0 shows a finished lifecycle (settled YES after two self-booked retries). Markets 1, 2 and 3 (HBAR, BTC and ETH) stay open until 1 November, 31 October and 16 October 2026, so you can stake on them straight away.
 
 Connect a wallet set to Hedera testnet (chain id 296, RPC https://testnet.hashio.io/api), for example MetaMask with the Hedera network added. For read-only browsing, no wallet is needed: every core route renders without one.
 
@@ -216,36 +213,39 @@ yarn next:build
 
 ## Verified on testnet
 
-Live deployment: `PredictionMarkets` at `0x0cc41d2215C6e66caFF2C996b7FEEC162111B3d2` ([Hashscan](https://hashscan.io/testnet/contract/0x0cc41d2215C6e66caFF2C996b7FEEC162111B3d2)).
+Live deployment: `PredictionMarkets` at `0x9b2A89773908f5BaAabD8f496E7Cc4B8d8A4516E` ([Hashscan](https://hashscan.io/testnet/contract/0x9b2A89773908f5BaAabD8f496E7Cc4B8d8A4516E)), source verified on Sourcify (exact match).
 
-Full lifecycle run with `yarn foundry:e2e:testnet` on 2026-10-02 against the deployment above (contract source verified on Sourcify, exact match). The first scheduled settlement found no Chainlink round after expiry yet, so the contract booked its own retry, which then settled the market. No bot or keeper was involved at any step.
+`yarn foundry:e2e:testnet` on 2026-10-03, market 0. The HBAR/USD testnet feed was quiet at expiry, so this run went through the retry path: the scheduled call found no Chainlink round, booked a retry, the retry booked another, and that one settled the market. Nobody but the network called `settle`.
 
-| Step | Evidence |
-|---|---|
-| Create market #0 (books the HIP-1215 settlement) | [transaction](https://hashscan.io/testnet/transaction/0x0aee085dbf4988cc6d128907b5a724fbdd6b7f561479affb9543780ab2a395e8) |
-| YES and NO position tokens (HTS, created by the contract) | [0.0.10830520](https://hashscan.io/testnet/token/0.0.10830520), [0.0.10830521](https://hashscan.io/testnet/token/0.0.10830521) |
-| Stake 5 HBAR on YES, 3 HBAR on NO | [YES](https://hashscan.io/testnet/transaction/0x3ace6113975ba9bc170e8ee3d734b4b941220d9c4bb48f2c8c026003728ea285), [NO](https://hashscan.io/testnet/transaction/0xc34327752495b176e7870af17e6c1d52640ad8bf61ab8c068e3eaf98b538910b) |
-| Scheduled settlement, executed by the network, no round yet, so it booked a retry | [schedule 0.0.10830522](https://hashscan.io/testnet/schedule/0.0.10830522) |
-| Self-booked retry, executed by the network, settled NO on Chainlink at $0.099035 | [schedule 0.0.10830705](https://hashscan.io/testnet/schedule/0.0.10830705) |
-| Redeem the winning NO position (8 HBAR) | [transaction](https://hashscan.io/testnet/transaction/0xbbcf415f91f45c307537acbeecba6795105502e5d15238d97a8fa09f941bb889) |
-| Creator withdraws the unused reserve | [transaction](https://hashscan.io/testnet/transaction/0x312ea637191036d60cf7823de275dd5bfe077471809bd279488920321bd4e04f) |
+| Time (UTC) | Step | Evidence |
+|---|---|---|
+| 06:43 | Create market 0, which creates both HTS tokens and books the settlement | [transaction](https://hashscan.io/testnet/transaction/0x71be2b4dfb442e0430879625f98900125be3a9f87b0f344d7994d76a04432fb0), YES [0.0.10838209](https://hashscan.io/testnet/token/0.0.10838209), NO [0.0.10838210](https://hashscan.io/testnet/token/0.0.10838210) |
+| 06:44 | Stake 5 HBAR on YES and 3 HBAR on NO | [YES](https://hashscan.io/testnet/transaction/0x5fb46067ef32ab8c61bb0590d22d7f1727ed09ff0875d9f4920f6f2fabe610d2), [NO](https://hashscan.io/testnet/transaction/0x8a3996ba8b497770cc32c9b303f3c0e696fc41d9abb90ef6d23a097d6fc9dee1) |
+| 06:49 | Expiry | |
+| 06:59 | Network runs the booked call; no round after expiry yet, so it books a retry | [schedule 0.0.10838211](https://hashscan.io/testnet/schedule/0.0.10838211), [retry booking](https://hashscan.io/testnet/transaction/0x2c96a45731d83d83a1579f50151c80492327fb59a199342e77d470f56aef6ff6) |
+| 07:14 | First retry runs; still no round, books the second | [schedule 0.0.10838392](https://hashscan.io/testnet/schedule/0.0.10838392), [retry booking](https://hashscan.io/testnet/transaction/0xe1fc33fd545b6e08791e97c2c37499796a165c143d31ac00141c5ca59bb55a7a) |
+| 07:29 | Second retry settles YES at $0.10062165, on a Chainlink round published 1960 s after expiry | [schedule 0.0.10838549](https://hashscan.io/testnet/schedule/0.0.10838549), [settlement](https://hashscan.io/testnet/transaction/0xefda2487d6298b82ccc1ac0d390dc404b21497160f8bb2a37c9e551d4d0afb8c) |
+| 07:29 | Redeem the winning YES tokens for the whole 8 HBAR pool | [transaction](https://hashscan.io/testnet/transaction/0x220a02113834eb25b8b84cd8dc36a49809896afb3c5ebbc0f8519e94a954c335) |
+| 07:29 | Creator withdraws what is left of the reserve | [transaction](https://hashscan.io/testnet/transaction/0x0566f04c6db8c45b637273eecc1b39d81a255f8ed656ae1051ec825fbb487478) |
+
+Earlier deployments are kept as history. `0x0cc41d22...B3d2` found the bug fixed in the current one: when its last retry still had no round, `settle` reverted, which left the market marked as retrying and charged the run to the pooled HBAR instead of the market's reserve. `0x5863781b...105b` ran the first full lifecycle on 2026-10-02 (one retry, settled NO).
 
 ## Make it yours
 
-The app is a working product, but every visual and naming decision sits in three files, so a fork can look like its own brand in minutes.
+Names, colors and images live in a few files, so a fork can rebrand without touching components.
 
 | What | Where |
 |---|---|
 | Name, short name, description | `packages/nextjs/utils/brand.ts` (`BRAND`), used by the header, page metadata, web app manifest and wallet modal |
-| Colors, radii, fonts | `packages/nextjs/styles/globals.css`: the dark `hedera` theme (default), the `hedera-light` theme, and the `--color-yes` / `--color-no` outcome colors in `@theme` |
-| Font families | `packages/nextjs/app/layout.tsx` (`next/font` Inter and JetBrains Mono); swap them and keep the CSS variable names |
+| Colors, radii, fonts | `packages/nextjs/styles/globals.css`: the dark `hedera` theme (default), the `hedera-light` theme, and the `--yes` / `--no` outcome colors under each theme |
+| Font families | `packages/nextjs/app/layout.tsx` (`next/font` Manrope and IBM Plex Mono); swap them and keep the CSS variable names |
 | Logo and coin icons | `packages/nextjs/public/logo.png` (header, favicon, app icons) and `public/coins/*.svg`, mapped in `ASSET_ICONS` in `brand.ts` |
 
-Components only use semantic classes (`bg-base-100`, `text-primary`, `bg-yes`, `text-no`, `.panel`), never raw hex values, so editing a theme recolors every page, including the price chart, which draws with `var(--color-primary)` and `var(--color-secondary)`. Shared market UI (asset badge, status pill, YES/NO bar) lives in `packages/nextjs/components/markets/ui.tsx`.
+Components only use semantic classes (`bg-base-100`, `text-primary`, `bg-yes`, `text-no`, `.panel`), never raw hex values, so editing a theme recolors every page, including the price chart, which draws with `var(--color-primary)`. Page width and spacing come from the `.shell` and `.page` classes in the same file. Shared market UI (asset badge, status pill, YES/NO bar) lives in `packages/nextjs/components/markets/ui.tsx`.
 
 Common changes:
 
-- New palette: change `--color-primary`, `--color-secondary` and the base colors in both themes, then the matching hex values in `BRAND`.
+- New palette: change `--color-primary` and the base colors in both themes, then the matching hex values in `BRAND`.
 - Light mode by default: set `defaultTheme="hedera-light"` on the `ThemeProvider` in `app/layout.tsx` and move `default: true` to the light theme in `globals.css`.
 - Other assets: add a feed (see Add a price feed below). The question wording comes from `marketQuestion` in `packages/nextjs/utils/markets/question.ts`.
 
@@ -321,14 +321,14 @@ hedera-harness run
 - The run ended with type-check, build, lint, tests and the static checks green, and one Tier 2 failure that was not the agent's code: the header balance and the HBAR price fetched CoinGecko and a second mirror host, which failed to resolve on the build machine. Both were fixed on `main` (the app now reads only the testnet mirror and the relay), and `yarn harness:validate` passes there with Tier 2 green on every gated route (all except `/debug`, see above).
 - The generated decoder, hook, panel and 9 unit tests landed unchanged apart from one comment.
 
-Tier 3 acceptance contract, graded by hand on the production build:
+Tier 3 acceptance contract, graded by hand. C1, C2 and C4 were re-graded on 2026-10-03 against market 0 of the current deployment; C3 and C5 were graded on the deployment the run used (`0x5863781b...105b`) and do not depend on which market is checked.
 
 | Id | Assertion | Result |
 |---|---|---|
-| C1 | Market 0 lists created, two stakes, retry booked, settled NO, redeemed, reserve withdrawn, newest first, with correct amounts | Pass: 7 entries, 5 and 3 HBAR |
-| C2 | Each entry links to the transaction that emitted it | Pass: every hash matches the mirror node logs, settlement is `0x9c2da867...` |
+| C1 | Market 0 lists created, two stakes, two retries booked, settled YES, redeemed, reserve withdrawn, newest first, with correct amounts | Pass: 8 entries, 5 and 3 HBAR |
+| C2 | Each entry links to the transaction that emitted it | Pass: every hash matches the mirror node logs, settlement is `0xefda2487...` |
 | C3 | Loading and error states, page keeps working | Pass by code review (skeleton, error with Retry, failures stay inside the panel) |
-| C4 | Existing routes and the resolution strip still render | Pass |
+| C4 | Existing routes and the resolution strip still render | Pass ("Resolved YES") |
 | C5 | A new stake appears after a real transaction | Pass with the deployer as signer: [stake on market 1](https://hashscan.io/testnet/transaction/0x8b508cde06355e3acbc1e6f5439ef0b5048373f039e7fcbcd0122a94e841618e) showed up on refresh |
 
 ## Disclaimer
