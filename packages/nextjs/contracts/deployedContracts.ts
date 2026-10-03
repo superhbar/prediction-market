@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-hbar/contract";
 const deployedContracts = {
   296: {
     PredictionMarkets: {
-      address: "0x5863781b36e7beee162152a7d8ab32fe471e105b",
+      address: "0x0cc41d2215C6e66caFF2C996b7FEEC162111B3d2",
       abi: [
         {
           type: "constructor",
@@ -281,6 +281,11 @@ const deployedContracts = {
                   name: "schedule",
                   type: "address",
                   internalType: "address",
+                },
+                {
+                  name: "schedulePending",
+                  type: "bool",
+                  internalType: "bool",
                 },
               ],
             },
@@ -825,6 +830,11 @@ const deployedContracts = {
         },
         {
           type: "error",
+          name: "ChainlinkRoundAvailable",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "FeeRefundFailed",
           inputs: [],
         },
@@ -937,6 +947,11 @@ const deployedContracts = {
         },
         {
           type: "error",
+          name: "PythFallbackNotOpen",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "PythFeeInsufficient",
           inputs: [
             {
@@ -1028,7 +1043,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 41274450,
+      deployedOnBlock: 41291798,
     },
   },
 } as const;
