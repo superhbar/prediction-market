@@ -95,6 +95,7 @@ contract PredictionMarkets is ReentrancyGuard {
         uint64 settlementTime;
         uint8 retriesLeft;
         address schedule;
+        bool schedulePending;
     }
 
     /// @notice Pyth oracle contract.
@@ -171,6 +172,10 @@ contract PredictionMarkets is ReentrancyGuard {
     error GraceNotPassed();
     /// @notice Thrown when no Chainlink round at or after expiry exists within maxRoundLag.
     error NoEligibleRound();
+    /// @notice Thrown when the Pyth fallback is used before every eligible Chainlink round would have published.
+    error PythFallbackNotOpen();
+    /// @notice Thrown when the Pyth fallback is used although a provably first Chainlink round exists.
+    error ChainlinkRoundAvailable();
     /// @notice Thrown when the Pyth fee sent is below the required update fee.
     error PythFeeInsufficient(uint256 sent, uint256 required);
     /// @notice Thrown when refunding excess Pyth fee fails.
@@ -274,7 +279,8 @@ contract PredictionMarkets is ReentrancyGuard {
             settlementPrice: 0,
             settlementTime: 0,
             retriesLeft: maxRetries,
-            schedule: schedule
+            schedule: schedule,
+            schedulePending: true
         });
         // forge-lint: disable-next-line(reentrancy-events)
         emit MarketCreated(marketId, feedKey, strike, expiry, msg.sender, yesToken, noToken, schedule, reserve);
@@ -318,15 +324,18 @@ contract PredictionMarkets is ReentrancyGuard {
     /// @param marketId The market to settle.
     function settle(uint256 marketId) external {
         Market storage m = _getMarket(marketId);
-        if (m.state != State.Open) revert MarketNotOpen();
+        if (msg.sender == address(this)) {
+            // The network bills each scheduled execution to this contract, so charge it to the market's
+            // reserve rather than to the shared balance that backs every pool. A schedule that fires after
+            // someone settled the market by hand returns quietly: reverting would still be billed.
+            m.schedulePending = false;
+            _chargeReserve(m, SCHEDULED_EXECUTION_COST);
+            if (m.state != State.Open) return;
+        } else if (m.state != State.Open) {
+            revert MarketNotOpen();
+        }
         // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp < m.expiry) revert NotExpired();
-
-        // The network bills each scheduled execution to this contract, so charge it to the market's reserve
-        // rather than to the shared balance that backs every pool.
-        if (msg.sender == address(this)) {
-            _chargeReserve(m, SCHEDULED_EXECUTION_COST);
-        }
 
         if (m.yesPool == 0 || m.noPool == 0) {
             _finalize(m, marketId, Outcome.Invalid, 0, 0, PriceSource.None);
@@ -343,6 +352,7 @@ contract PredictionMarkets is ReentrancyGuard {
                 m.retriesLeft -= 1;
                 _chargeReserve(m, retryCostEstimate);
                 m.schedule = schedule;
+                m.schedulePending = true;
                 // forge-lint: disable-next-line(reentrancy-events)
                 emit SettlementRetryScheduled(marketId, schedule, retryAt, m.retriesLeft);
                 return;
@@ -358,8 +368,10 @@ contract PredictionMarkets is ReentrancyGuard {
     }
 
     /// @notice Settles an expired market on the Pyth price published at expiry.
-    /// @dev Permissionless fallback when the scheduled path fails. Only accepts the first update at or
-    ///      after expiry via the publish-time window, so a late settler cannot cherry-pick a price.
+    /// @dev Permissionless fallback, only once Chainlink has provably failed: it opens at expiry plus
+    ///      maxRoundLag (no later Chainlink round can still qualify) and refuses while a provably first
+    ///      Chainlink round exists, so nobody can pick whichever oracle favours them. Only accepts the
+    ///      first Pyth update at or after expiry via the publish-time window.
     /// @param marketId The market to settle.
     /// @param updateData Pyth price update bytes, fetched off-chain.
     function settleWithPyth(uint256 marketId, bytes[] calldata updateData) external payable {
@@ -373,6 +385,11 @@ contract PredictionMarkets is ReentrancyGuard {
             _refund(msg.sender, msg.value);
             return;
         }
+
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp < uint256(m.expiry) + maxRoundLag) revert PythFallbackNotOpen();
+        (bool chainlinkFound,, uint256 chainlinkTime) = _firstRoundAtOrAfter(m.feedKey, m.expiry);
+        if (chainlinkFound && chainlinkTime <= uint256(m.expiry) + maxRoundLag) revert ChainlinkRoundAvailable();
 
         uint256 fee = IPyth(pyth).getUpdateFee(updateData);
         if (msg.value < fee) revert PythFeeInsufficient(msg.value, fee);
@@ -432,21 +449,24 @@ contract PredictionMarkets is ReentrancyGuard {
         emit Redeemed(marketId, msg.sender, yes, amount, payout);
     }
 
-    /// @notice Withdraws a settled or voided market's leftover reserve to its creator, exactly once.
+    /// @notice Withdraws a settled or voided market's leftover reserve to its creator.
     /// @dev Network fees are only estimated in the reserve. Paying at most what the balance holds beyond every
     ///      trader pool and every other market's reserve means an underestimate is absorbed by this creator and
-    ///      never by traders.
+    ///      never by traders. While a booked schedule has not run yet (the market was settled by hand first),
+    ///      one execution's cost stays in the reserve to pay for it; the creator can withdraw again afterwards.
     /// @param marketId The market whose reserve to withdraw.
     function withdrawReserve(uint256 marketId) external nonReentrant {
         Market storage m = _getMarket(marketId);
         if (msg.sender != m.creator) revert NotMarketCreator();
         if (m.state != State.Settled && m.state != State.Voided) revert MarketNotSettled();
-        uint256 recorded = m.reserve;
+        uint256 holdback = m.schedulePending ? SCHEDULED_EXECUTION_COST : 0;
+        if (holdback > m.reserve) holdback = m.reserve;
+        uint256 recorded = m.reserve - holdback;
         if (recorded == 0) revert NoReserve();
         uint256 owedToOthers = totalPoolLiability + totalReserves - recorded;
         uint256 available = address(this).balance > owedToOthers ? address(this).balance - owedToOthers : 0;
         uint256 amount = recorded < available ? recorded : available;
-        m.reserve = 0;
+        m.reserve = holdback;
         totalReserves -= recorded;
         if (amount == 0) revert NoReserve();
         (bool ok,) = msg.sender.call{ value: amount }("");
@@ -561,8 +581,12 @@ contract PredictionMarkets is ReentrancyGuard {
     }
 
     /// @notice Finds the first Chainlink round with updatedAt >= expiry, walking back from latest.
-    /// @dev Bounded to 48 steps and never crosses a phase boundary. Stops on revert or empty rounds.
-    /// @return found Whether such a round exists.
+    /// @dev A candidate is only returned once it is PROVEN first: the walk must reach an earlier round of the
+    ///      same phase with updatedAt < expiry. Rounds with a non-positive answer are skipped (not a price).
+    ///      Anything that stops the walk without that proof (48-step bound, phase boundary, first round of a
+    ///      phase, a reverting or empty round) returns not found, so the market falls back to a retry, Pyth
+    ///      or voiding instead of settling on a round that may not be the first.
+    /// @return found Whether a provably first round exists.
     /// @return price The round price normalized to 1e18.
     /// @return priceTime The round updatedAt timestamp.
     function _firstRoundAtOrAfter(bytes32 feedKey, uint64 expiry)
@@ -571,41 +595,46 @@ contract PredictionMarkets is ReentrancyGuard {
         returns (bool found, int256 price, uint256 priceTime)
     {
         IAggregatorV3 feed = IAggregatorV3(feeds[feedKey].chainlink);
-        uint8 feedDecimals = feed.decimals();
+        // The candidate is the earliest valid (positive) round at or after expiry seen so far; a
+        // non-positive candidateAnswer means none has been seen yet.
         // forge-lint: disable-next-line(unused-return)
-        (uint80 roundId, int256 answer,, uint256 updatedAt,) = feed.latestRoundData();
-        if (updatedAt < expiry || updatedAt == 0 || answer <= 0) {
+        (uint80 cursor, int256 candidateAnswer,, uint256 candidateTime,) = feed.latestRoundData();
+        if (candidateTime < expiry || candidateTime == 0) {
             // forge-lint: disable-next-line(boolean-cst)
             return (false, 0, 0);
         }
 
-        uint256 steps = 0;
-        while (steps < MAX_WALK_STEPS) {
+        for (uint256 steps = 0; steps < MAX_WALK_STEPS; ++steps) {
             // forge-lint: disable-next-line(unsafe-typecast)
-            if (uint64(roundId) <= 1) break;
-            uint80 prevId = roundId - 1;
+            if (uint64(cursor) <= 1) break;
             // forge-lint: disable-next-line(calls-loop)
-            try feed.getRoundData(prevId) returns (
+            try feed.getRoundData(cursor - 1) returns (
                 uint80 prevRoundId,
                 int256 prevAnswer,
                 uint256, /*startedAt*/
                 uint256 prevUpdatedAt,
                 uint80 /*answeredInRound*/
             ) {
-                if ((prevRoundId >> 64) != (roundId >> 64)) break;
-                if (prevUpdatedAt == 0 || prevUpdatedAt < expiry) break;
-                if (prevAnswer <= 0) break;
-                roundId = prevRoundId;
-                answer = prevAnswer;
-                updatedAt = prevUpdatedAt;
-                steps += 1;
+                if ((prevRoundId >> 64) != (cursor >> 64) || prevUpdatedAt == 0) break;
+                if (prevUpdatedAt < expiry) {
+                    found = candidateAnswer > 0;
+                    break;
+                }
+                cursor = prevRoundId;
+                if (prevAnswer > 0) {
+                    candidateAnswer = prevAnswer;
+                    candidateTime = prevUpdatedAt;
+                }
             } catch {
                 break;
             }
         }
-        found = true;
-        price = PriceMath.normalizeChainlink(answer, feedDecimals);
-        priceTime = updatedAt;
+        if (!found) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0, 0);
+        }
+        price = PriceMath.normalizeChainlink(candidateAnswer, feed.decimals());
+        priceTime = candidateTime;
     }
 
     /// @notice Deducts an estimated network cost from a market's reserve, saturating at zero.

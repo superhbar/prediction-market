@@ -329,6 +329,7 @@ contract PredictionMarketsTest is Test {
         assertEq(uint256(m.state), uint256(State.Open));
         assertEq(m.retriesLeft, 1);
         assertEq(m.reserve, reserveBefore - pm.SCHEDULED_EXECUTION_COST() - RETRY_COST);
+        assertTrue(m.schedulePending);
         assertEq(hss.callCount(), 2);
         (address to, uint256 at, uint256 gasLimit) = hss.callArgs(1);
         assertEq(to, address(pm));
@@ -340,6 +341,7 @@ contract PredictionMarketsTest is Test {
     function test_Settle_ScheduledExecutionChargesReserve() public {
         uint256 marketId = _createMarket();
         _stakeBothSides(marketId);
+        hbarFeed.addRound(20_000_000, expiry - 100);
         hbarFeed.addRound(35_000_000, expiry + 50);
         uint256 reserveBefore = pm.getMarket(marketId).reserve;
         vm.warp(expiry + 60);
@@ -348,17 +350,50 @@ contract PredictionMarketsTest is Test {
         PredictionMarkets.Market memory m = pm.getMarket(marketId);
         assertEq(uint256(m.state), uint256(State.Settled));
         assertEq(m.reserve, reserveBefore - pm.SCHEDULED_EXECUTION_COST());
+        assertFalse(m.schedulePending);
     }
 
     function test_Settle_ManualCallLeavesReserveUntouched() public {
         uint256 marketId = _createMarket();
         _stakeBothSides(marketId);
+        hbarFeed.addRound(20_000_000, expiry - 100);
         hbarFeed.addRound(35_000_000, expiry + 50);
         uint256 reserveBefore = pm.getMarket(marketId).reserve;
         vm.warp(expiry + 60);
         vm.prank(CAROL);
         pm.settle(marketId);
         assertEq(pm.getMarket(marketId).reserve, reserveBefore);
+        assertTrue(pm.getMarket(marketId).schedulePending);
+    }
+
+    function test_Settle_ScheduledCallAfterManualSettleReturnsAndCharges() public {
+        uint256 marketId = _settledYesMarket();
+        PredictionMarkets.Market memory before = pm.getMarket(marketId);
+        assertTrue(before.schedulePending);
+        // The booked schedule still fires after a manual settle: it must not revert (a revert is still billed)
+        // and it pays for itself from the reserve.
+        vm.prank(address(pm));
+        pm.settle(marketId);
+        PredictionMarkets.Market memory afterCall = pm.getMarket(marketId);
+        assertFalse(afterCall.schedulePending);
+        assertEq(afterCall.reserve, before.reserve - pm.SCHEDULED_EXECUTION_COST());
+        assertEq(uint256(afterCall.outcome), uint256(before.outcome));
+        assertEq(afterCall.settlementTime, before.settlementTime);
+    }
+
+    function test_Settle_RefusesWhenWalkCannotReachExpiry() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        hbarFeed.addRound(20_000_000, expiry - 100);
+        // 50 rounds inside maxRoundLag: the first one (below strike) is out of the 48-step walk's reach, so
+        // the walk cannot prove which round is first and must not settle on a later one (above strike).
+        hbarFeed.addRound(10_000_000, expiry + 10);
+        for (uint256 i = 1; i < 50; ++i) {
+            hbarFeed.addRound(35_000_000, expiry + 10 + i * 60);
+        }
+        vm.warp(expiry + 1 hours);
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
+        pm.settle(marketId);
     }
 
     function test_Settle_RetryExhaustedRevertsForSelfCall() public {
@@ -407,36 +442,37 @@ contract PredictionMarketsTest is Test {
         expensive.settle(marketId);
     }
 
-    function test_Settle_StopsAtPhaseBoundary() public {
+    function test_Settle_RefusesUnprovenRoundAtPhaseBoundary() public {
         uint256 marketId = _createMarket();
         _stakeBothSides(marketId);
         hbarFeed.addRoundWithId(500, 35_000_000, expiry + 10);
         hbarFeed.addRoundSpoofed(499, (uint80(7) << 64) | 499, 10_000_000, expiry + 5);
         vm.warp(expiry + 1000);
+        // The previous phase holds an earlier round after expiry (below strike): the walk cannot cross the
+        // boundary to check it, so it must not claim round 500 is the first.
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
         pm.settle(marketId);
-        PredictionMarkets.Market memory m = pm.getMarket(marketId);
-        assertEq(uint256(m.outcome), uint256(Outcome.Yes));
-        assertEq(m.settlementTime, expiry + 10);
     }
 
-    function test_Settle_StopsWhenPreviousRoundReverts() public {
+    function test_Settle_RefusesWhenPreviousRoundIsMissing() public {
         uint256 marketId = _createMarket();
         _stakeBothSides(marketId);
         hbarFeed.addRoundWithId(5, 10_000_000, expiry - 50);
         hbarFeed.addRoundWithId(10, 35_000_000, expiry + 10);
         vm.warp(expiry + 1000);
+        // Round 9 reverts: rounds 6 to 9 could hold an earlier price after expiry.
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
         pm.settle(marketId);
-        assertEq(pm.getMarket(marketId).settlementTime, expiry + 10);
     }
 
-    function test_Settle_SingleFirstRoundOfPhaseSettles() public {
+    function test_Settle_RefusesFirstRoundOfPhase() public {
         uint256 marketId = _createMarket();
         _stakeBothSides(marketId);
         hbarFeed.nextPhase();
         hbarFeed.addRound(35_000_000, expiry + 10);
         vm.warp(expiry + 1000);
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
         pm.settle(marketId);
-        assertEq(uint256(pm.getMarket(marketId).outcome), uint256(Outcome.Yes));
     }
 
     function test_Settle_SkipsNonPositivePreviousRound() public {
@@ -448,6 +484,44 @@ contract PredictionMarketsTest is Test {
         vm.warp(expiry + 1000);
         pm.settle(marketId);
         assertEq(pm.getMarket(marketId).settlementTime, expiry + 200);
+    }
+
+    function test_Settle_RefusesWhenOnlyInvalidRoundsFollowExpiry() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        hbarFeed.addRound(20_000_000, expiry - 100);
+        hbarFeed.addRound(0, expiry + 50);
+        hbarFeed.addRound(-1, expiry + 100);
+        vm.warp(expiry + 1000);
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
+        pm.settle(marketId);
+    }
+
+    function test_Settle_RefusesToCrossIntoPreviousPhase() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        // Round 500 (above strike) is preceded by a round reporting phase 7 (below strike, after expiry), whose
+        // own predecessor is before expiry. Following it would "prove" a round of another phase; refuse instead.
+        hbarFeed.addRoundWithId(500, 35_000_000, expiry + 10);
+        hbarFeed.addRoundSpoofed(499, (uint80(7) << 64) | 499, 10_000_000, expiry + 5);
+        hbarFeed.addRoundSpoofed((uint80(7) << 64) | 498, (uint80(7) << 64) | 498, 9_000_000, expiry - 100);
+        vm.warp(expiry + 1000);
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
+        pm.settle(marketId);
+    }
+
+    function test_Settle_ScheduledCallLeavesVoidedMarketAlone() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        vm.warp(expiry + 24 hours);
+        pm.voidMarket(marketId);
+        uint256 callsBefore = hss.callCount();
+        vm.prank(address(pm));
+        pm.settle(marketId);
+        PredictionMarkets.Market memory m = pm.getMarket(marketId);
+        assertEq(uint256(m.state), uint256(State.Voided));
+        assertEq(uint256(m.outcome), uint256(Outcome.Invalid));
+        assertEq(hss.callCount(), callsBefore);
     }
 
     function test_Settle_RejectsRoundBeyondMaxLag() public {
@@ -509,7 +583,7 @@ contract PredictionMarketsTest is Test {
         _stakeBothSides(marketId);
         bytes[] memory updateData = _pythUpdate(expiry, 35_000_000);
         uint256 fee = pyth.getUpdateFee(updateData);
-        vm.warp(expiry + 1000);
+        vm.warp(expiry + 2 hours);
         uint256 carolBefore = CAROL.balance;
         vm.expectEmit(true, false, false, true);
         // forge-lint: disable-next-line(reentrancy-events)
@@ -528,7 +602,7 @@ contract PredictionMarketsTest is Test {
         _stakeBothSides(marketId);
         bytes[] memory updateData = _pythUpdate(expiry + 100, 25_000_000);
         uint256 fee = pyth.getUpdateFee(updateData);
-        vm.warp(expiry + 1000);
+        vm.warp(expiry + 2 hours);
         _settlePythAs(CAROL, marketId, updateData, fee);
         assertEq(uint256(pm.getMarket(marketId).outcome), uint256(Outcome.No));
     }
@@ -538,7 +612,7 @@ contract PredictionMarketsTest is Test {
         _stakeBothSides(marketId);
         bytes[] memory updateData = _pythUpdate(expiry - 1, 35_000_000);
         uint256 fee = pyth.getUpdateFee(updateData);
-        vm.warp(expiry + 1000);
+        vm.warp(expiry + 2 hours);
         vm.expectRevert(abi.encodeWithSelector(MockPyth.PriceUnavailable.selector, PYTH_HBAR_ID));
         _settlePythAs(CAROL, marketId, updateData, fee);
     }
@@ -558,7 +632,7 @@ contract PredictionMarketsTest is Test {
         _stakeBothSides(marketId);
         bytes[] memory updateData = _pythUpdate(expiry, 35_000_000);
         uint256 fee = pyth.getUpdateFee(updateData);
-        vm.warp(expiry + 1000);
+        vm.warp(expiry + 2 hours);
         vm.expectRevert(abi.encodeWithSelector(PredictionMarkets.PythFeeInsufficient.selector, fee - 1, fee));
         _settlePythAs(CAROL, marketId, updateData, fee - 1);
     }
@@ -581,11 +655,55 @@ contract PredictionMarketsTest is Test {
         vm.deal(address(rejector), 10e8);
         bytes[] memory updateData = _pythUpdate(expiry, 35_000_000);
         uint256 fee = pyth.getUpdateFee(updateData);
-        vm.warp(expiry + 1000);
+        vm.warp(expiry + 2 hours);
         vm.expectRevert(PredictionMarkets.FeeRefundFailed.selector);
         // forge-lint: disable-next-line(arbitrary-send-eth)
         rejector.settlePyth{ value: fee + 5000 }(marketId, updateData);
         assertEq(uint256(pm.getMarket(marketId).state), uint256(State.Open));
+    }
+
+    function test_SettleWithPyth_RevertsBeforeFallbackWindow() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        bytes[] memory updateData = _pythUpdate(expiry, 35_000_000);
+        vm.warp(expiry + 2 hours - 1);
+        vm.expectRevert(PredictionMarkets.PythFallbackNotOpen.selector);
+        _settlePythAs(CAROL, marketId, updateData, 1000);
+    }
+
+    function test_SettleWithPyth_RevertsWhenChainlinkRoundAvailable() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        _addSettlementRounds();
+        bytes[] memory updateData = _pythUpdate(expiry, 35_000_000);
+        vm.warp(expiry + 3 hours);
+        vm.expectRevert(PredictionMarkets.ChainlinkRoundAvailable.selector);
+        _settlePythAs(CAROL, marketId, updateData, 1000);
+    }
+
+    function test_SettleWithPyth_AllowedWhenChainlinkRoundUnproven() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        hbarFeed.nextPhase();
+        hbarFeed.addRound(35_000_000, expiry + 10);
+        bytes[] memory updateData = _pythUpdate(expiry + 5, 25_000_000);
+        uint256 fee = pyth.getUpdateFee(updateData);
+        vm.warp(expiry + 2 hours);
+        _settlePythAs(CAROL, marketId, updateData, fee);
+        assertEq(uint256(pm.getMarket(marketId).source), uint256(PriceSource.Pyth));
+        assertEq(uint256(pm.getMarket(marketId).outcome), uint256(Outcome.No));
+    }
+
+    function test_SettleWithPyth_AllowedWhenChainlinkRoundIsTooLate() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        hbarFeed.addRound(20_000_000, expiry - 100);
+        hbarFeed.addRound(35_000_000, expiry + 2 hours + 1);
+        bytes[] memory updateData = _pythUpdate(expiry + 5, 25_000_000);
+        uint256 fee = pyth.getUpdateFee(updateData);
+        vm.warp(expiry + 3 hours);
+        _settlePythAs(CAROL, marketId, updateData, fee);
+        assertEq(uint256(pm.getMarket(marketId).source), uint256(PriceSource.Pyth));
     }
 
     function test_SettleWithPyth_RevertsBeforeExpiry() public {
@@ -742,10 +860,40 @@ contract PredictionMarketsTest is Test {
 
     // Reserve withdrawal
 
+    function test_WithdrawReserve_HoldsBackPendingExecutionThenReleasesIt() public {
+        uint256 marketId = _settledYesMarket();
+        uint256 cost = pm.SCHEDULED_EXECUTION_COST();
+        uint256 reserve = pm.getMarket(marketId).reserve;
+        assertTrue(reserve >= MIN_RESERVE);
+        uint256 creatorBefore = CREATOR.balance;
+        vm.expectEmit(true, false, false, true);
+        // forge-lint: disable-next-line(reentrancy-events)
+        emit PredictionMarkets.ReserveWithdrawn(marketId, CREATOR, reserve - cost);
+        vm.prank(CREATOR);
+        pm.withdrawReserve(marketId);
+        assertEq(CREATOR.balance, creatorBefore + reserve - cost);
+        assertEq(pm.getMarket(marketId).reserve, cost);
+        assertEq(pm.totalReserves(), cost);
+        // Nothing more until the booked schedule has run.
+        vm.prank(CREATOR);
+        vm.expectRevert(PredictionMarkets.NoReserve.selector);
+        pm.withdrawReserve(marketId);
+        // The schedule fires and spends the holdback; the reserve is then fully accounted for.
+        vm.prank(address(pm));
+        pm.settle(marketId);
+        assertEq(pm.getMarket(marketId).reserve, 0);
+        assertEq(pm.totalReserves(), 0);
+        vm.prank(CREATOR);
+        vm.expectRevert(PredictionMarkets.NoReserve.selector);
+        pm.withdrawReserve(marketId);
+    }
+
     function test_WithdrawReserve_CreatorWithdrawsOnce() public {
         uint256 marketId = _settledYesMarket();
+        // The booked schedule already ran, so there is no holdback.
+        vm.prank(address(pm));
+        pm.settle(marketId);
         uint256 expected = pm.getMarket(marketId).reserve;
-        assertTrue(expected >= MIN_RESERVE);
         uint256 creatorBefore = CREATOR.balance;
         vm.expectEmit(true, false, false, true);
         // forge-lint: disable-next-line(reentrancy-events)
@@ -761,6 +909,10 @@ contract PredictionMarketsTest is Test {
 
     function test_WithdrawReserve_CapsAtSurplusSoTradersStayWhole() public {
         uint256 marketId = _settledYesMarket();
+        vm.prank(address(pm));
+        pm.settle(marketId);
+        // The network bills the scheduled execution the reserve was charged for.
+        vm.deal(address(pm), address(pm).balance - pm.SCHEDULED_EXECUTION_COST());
         uint256 recorded = pm.getMarket(marketId).reserve;
         // Simulate network fees that cost more than the reserve estimated: 1 HBAR leaves the contract.
         uint256 shortfall = 1e8;
