@@ -6,6 +6,8 @@ Predera is a template for price prediction markets on Hedera. Someone opens a ma
 npm create scaffold-hbar@latest -- --template superhbar/prediction-market
 ```
 
+Live demo on Hedera testnet: [predera.vercel.app](https://predera.vercel.app). It reads the shipped deployment, so you can open a market's settlement timeline and activity log without installing anything. The built-in burner wallet works there too (testnet HBAR only).
+
 ![Market 0 on testnet: the scheduled call found no Chainlink round, booked two retries on its own, and the second retry settled YES. Every step is in the activity panel with a Hashscan link](docs/screenshots/market-detail.png)
 
 More screenshots: [an open market with the payout preview](docs/screenshots/market-open.png), [market list](docs/screenshots/markets.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [light theme](docs/screenshots/market-detail-light.png). All are taken from the production build against the live testnet deployment.

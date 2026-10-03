@@ -42,3 +42,4 @@ node_modules/
 .skill-cache/
 .harness-skills/
 .harness-context/
+.vercel
