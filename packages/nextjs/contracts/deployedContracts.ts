@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-hbar/contract";
 const deployedContracts = {
   296: {
     PredictionMarkets: {
-      address: "0x0cc41d2215C6e66caFF2C996b7FEEC162111B3d2",
+      address: "0x9b2A89773908f5BaAabD8f496E7Cc4B8d8A4516E",
       abi: [
         {
           type: "constructor",
@@ -763,6 +763,19 @@ const deployedContracts = {
         },
         {
           type: "event",
+          name: "SettlementRetriesExhausted",
+          inputs: [
+            {
+              name: "marketId",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "SettlementRetryScheduled",
           inputs: [
             {
@@ -1043,7 +1056,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 41291798,
+      deployedOnBlock: 41294157,
     },
   },
 } as const;
