@@ -40,7 +40,14 @@ const deadline = () => BigInt(Math.floor(Date.now() / 1000)) + SWAP_DEADLINE_SEC
  * rate; this panel buys from or sells to whoever provides liquidity, at the AMM price. Quotes come from the
  * router's getAmountsOut; nothing here computes a payout.
  */
-export function TradePanel({ market }: { market: Market }) {
+export function TradePanel({
+  market,
+  embedded = false,
+}: {
+  market: Market;
+  /** Rendered inside PositionCard, which supplies the panel frame and the tab that names it. */
+  embedded?: boolean;
+}) {
   const { targetNetwork } = useTargetNetwork();
   const deployment = SAUCERSWAP[targetNetwork.id];
   const [side, setSide] = useState<Side>("YES");
@@ -51,36 +58,50 @@ export function TradePanel({ market }: { market: Market }) {
   if (!deployment || market.state !== MarketState.Open) return null;
 
   return (
-    <section className="panel p-5">
+    <section className={embedded ? "" : "panel p-5"}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-base-content/70 m-0">Trade on SaucerSwap</p>
+        {embedded ? (
+          <p className="text-sm text-base-content/60 m-0">
+            Buy or sell YES and NO tokens on SaucerSwap at the pool price.
+          </p>
+        ) : (
+          <p className="text-sm font-semibold text-base-content/70 m-0">Trade on SaucerSwap</p>
+        )}
         {pool.pair && (
           <a
             href={hashscanLink(targetNetwork.id, "contract", pool.pair)}
             target="_blank"
             rel="noreferrer"
-            className="text-xs text-primary"
+            className="text-xs text-primary shrink-0"
           >
             Pool on Hashscan
           </a>
         )}
       </div>
-      <div className="grid grid-cols-2 gap-2 mt-3">
-        {(["YES", "NO"] as const).map(option => (
-          <button
-            key={option}
-            onClick={() => setSide(option)}
-            className={`btn btn-sm h-9 ${
-              side === option
-                ? option === "YES"
-                  ? "bg-yes text-base-200 border-yes"
-                  : "bg-no text-base-200 border-no"
-                : "btn-ghost border-base-300"
-            }`}
-          >
-            {option}
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-2 mt-3" role="radiogroup" aria-label="Outcome">
+        {(["YES", "NO"] as const).map(option => {
+          const selected = side === option;
+          const yes = option === "YES";
+          return (
+            <button
+              key={option}
+              role="radio"
+              aria-checked={selected}
+              onClick={() => setSide(option)}
+              className={`py-3 rounded-xl font-semibold transition-colors ${
+                yes
+                  ? selected
+                    ? "bg-yes text-base-200"
+                    : "bg-yes/10 text-yes hover:bg-yes/20"
+                  : selected
+                    ? "bg-no text-base-200"
+                    : "bg-no/10 text-no hover:bg-no/20"
+              }`}
+            >
+              {yes ? "Yes" : "No"}
+            </button>
+          );
+        })}
       </div>
       {pool.isLoading ? (
         <p className="text-sm mt-4 mb-0 text-base-content/60">Looking for a pool…</p>

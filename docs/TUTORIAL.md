@@ -29,7 +29,7 @@ Create a market from **Create market** in the header. Pick HBAR, keep the sugges
 |---|---|---|
 | Create market confirms | The contract created two HTS tokens (YES and NO) with itself as treasury, supply key and wipe key, then booked its own `settle` call with the Schedule Service (HIP-1215) for 10 minutes after expiry. | `createMarket` in `packages/foundry/contracts/PredictionMarkets.sol` |
 | You stake 1 HBAR on YES | Your HBAR joined the YES pool, the contract minted 1 YES token and sent it to you. The first stake per token also associates your account with it (about 0.65 HBAR, once). | `stake`; association prompt in `components/markets/StakePanel.tsx` |
-| The countdown hits zero | Trading stops. Anyone could already open a SaucerSwap pool for the tokens and trade them before this point. | `components/markets/TradePanel.tsx` |
+| The countdown hits zero | Staking stops. YES and NO tokens keep changing hands on SaucerSwap, in the market page's Trade tab, until the market settles. | `components/markets/PositionCard.tsx`, `TradePanel.tsx` |
 | "Resolving" appears | The network ran the booked call. It looks for the first Chainlink round published at or after expiry; when there is none yet, it books the next check from the market's reserve. | `settle`, `_eligibleChainlinkRound` |
 | "Settled YES" or "Settled NO" | A scheduled check found a round it could prove is the first after expiry and closed the market on it. | `settle`, `chainlinkSettlementRound` |
 | You redeem | The contract wiped your tokens with its wipe key and paid `quotePayout`. No approve step. | `redeem`, `components/markets/RedeemPanel.tsx` |

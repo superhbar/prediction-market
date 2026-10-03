@@ -4,13 +4,12 @@ import Link from "next/link";
 import { ActivityPanel } from "~~/components/markets/ActivityPanel";
 import { Countdown } from "~~/components/markets/Countdown";
 import { OddsBar } from "~~/components/markets/OddsBar";
+import { PositionCard } from "~~/components/markets/PositionCard";
 import { PriceChart } from "~~/components/markets/PriceChart";
 import { RecordPanel } from "~~/components/markets/RecordPanel";
 import { RedeemPanel } from "~~/components/markets/RedeemPanel";
 import { SettlementTimeline } from "~~/components/markets/SettlementTimeline";
-import { StakePanel } from "~~/components/markets/StakePanel";
 import { ErrorState, MarketDetailSkeleton } from "~~/components/markets/States";
-import { TradePanel } from "~~/components/markets/TradePanel";
 import { AssetBadge, StatusPill } from "~~/components/markets/ui";
 import { useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarket } from "~~/hooks/markets/useMarket";
@@ -139,8 +138,7 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
         </div>
         <div className="lg:col-span-4 order-first lg:order-none">
           <div className="lg:sticky lg:top-24 flex flex-col gap-4">
-            <StakePanel marketId={Number(id)} market={market} status={status} initialSide={initialSide} />
-            <TradePanel market={market} />
+            <PositionCard marketId={Number(id)} market={market} status={status} initialSide={initialSide} />
             <RedeemPanel marketId={Number(id)} market={market} />
             <RecordPanel marketId={Number(id)} market={market} />
           </div>

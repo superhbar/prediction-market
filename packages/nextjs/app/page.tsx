@@ -5,7 +5,7 @@ import Link from "next/link";
 import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { FILTERS, MarketCard } from "~~/components/markets/MarketCard";
 import { EmptyState, ErrorState, MarketCardSkeleton } from "~~/components/markets/States";
-import { CoinIcon } from "~~/components/markets/ui";
+import { CoinIcon, SegmentedTabs } from "~~/components/markets/ui";
 import { type PricePoint, useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
 import { useMarkets } from "~~/hooks/markets/useMarkets";
@@ -104,32 +104,16 @@ const Home = () => {
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
-        <div
-          role="tablist"
-          aria-label="Status"
-          className="flex max-w-full overflow-x-auto rounded-xl border border-base-300 p-1"
-        >
-          {FILTERS.map(entry => {
-            const selected = filter === entry.value;
-            const total = matching.filter(item => matchesFilter(item.status, entry.value)).length;
-            return (
-              <button
-                key={entry.value}
-                role="tab"
-                aria-selected={selected}
-                onClick={() => setFilter(entry.value)}
-                className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 text-[13.5px] font-semibold transition-colors ${
-                  selected ? "bg-base-100 text-base-content" : "text-base-content/60 hover:text-base-content"
-                }`}
-              >
-                {entry.label}
-                <span className={`text-xs tabular-nums ${selected ? "text-base-content/60" : "text-base-content/40"}`}>
-                  {total}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedTabs
+          ariaLabel="Status"
+          value={filter}
+          onChange={setFilter}
+          tabs={FILTERS.map(entry => ({
+            value: entry.value,
+            label: entry.label,
+            count: matching.filter(item => matchesFilter(item.status, entry.value)).length,
+          }))}
+        />
         <label className="ml-auto flex w-full sm:w-72 items-center gap-2 rounded-xl border border-base-300 px-3 h-[42px] focus-within:border-primary">
           <MagnifyingGlassIcon className="w-4 h-4 text-base-content/50" aria-hidden />
           <input

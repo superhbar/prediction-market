@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { PricePoint } from "~~/hooks/markets/useChainlinkHistory";
 import { ASSET_ICONS } from "~~/utils/brand";
 import type { UiStatus } from "~~/utils/markets/types";
@@ -82,5 +83,53 @@ export function Sparkline({ points, className = "" }: { points: PricePoint[]; cl
     <svg viewBox="0 0 110 32" className={`w-28 h-8 ${rising ? "text-yes" : "text-no"} ${className}`} aria-hidden>
       <path d={path} fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+type Tab<T extends string> = { value: T; label: ReactNode; count?: number };
+
+/** Segmented tab strip: the market list's status filter and the market page's Stake / Trade switch. */
+export function SegmentedTabs<T extends string>({
+  tabs,
+  value,
+  onChange,
+  ariaLabel,
+  fill = false,
+}: {
+  tabs: Tab<T>[];
+  value: T;
+  onChange: (value: T) => void;
+  ariaLabel: string;
+  /** Stretch the tabs to share the full width, as inside a card. */
+  fill?: boolean;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label={ariaLabel}
+      className={`flex max-w-full overflow-x-auto rounded-xl border border-base-300 p-1 ${fill ? "w-full" : ""}`}
+    >
+      {tabs.map(tab => {
+        const selected = tab.value === value;
+        return (
+          <button
+            key={tab.value}
+            role="tab"
+            aria-selected={selected}
+            onClick={() => onChange(tab.value)}
+            className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 text-[13.5px] font-semibold transition-colors ${
+              fill ? "flex-1" : ""
+            } ${selected ? "bg-base-100 text-base-content" : "text-base-content/60 hover:text-base-content"}`}
+          >
+            {tab.label}
+            {tab.count !== undefined && (
+              <span className={`text-xs tabular-nums ${selected ? "text-base-content/60" : "text-base-content/40"}`}>
+                {tab.count}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
   );
 }

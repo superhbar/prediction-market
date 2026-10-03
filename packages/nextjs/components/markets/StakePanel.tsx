@@ -26,12 +26,14 @@ type StakePanelProps = {
   status: UiStatus;
   /** Side selected on first render, from the market card's Stake Yes or Stake No link. */
   initialSide?: "YES" | "NO";
+  /** Rendered inside PositionCard, which supplies the panel frame and the tab that names it. */
+  embedded?: boolean;
 };
 
 type Association = "checking" | "ok" | "needs-association" | "unknown";
 
 /** Stake YES/NO with a projected payout, association check and explicit gas. */
-export function StakePanel({ marketId, market, status, initialSide = "YES" }: StakePanelProps) {
+export function StakePanel({ marketId, market, status, initialSide = "YES", embedded = false }: StakePanelProps) {
   const { address: account } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const [side, setSide] = useState<"YES" | "NO">(initialSide);
@@ -126,7 +128,7 @@ export function StakePanel({ marketId, market, status, initialSide = "YES" }: St
 
   if (!tradingOpen) {
     return (
-      <div className="panel p-5">
+      <div className={embedded ? "" : "panel p-5"}>
         <p className="text-sm font-semibold text-base-content/70 m-0">Staking closed</p>
         <p className="text-base font-medium leading-snug mt-2 mb-0">
           {isRefund(market)
@@ -146,8 +148,14 @@ export function StakePanel({ marketId, market, status, initialSide = "YES" }: St
   }
 
   return (
-    <div className="panel p-5">
-      <p className="text-sm font-semibold text-base-content/70 m-0">Take a side</p>
+    <div className={embedded ? "" : "panel p-5"}>
+      {embedded ? (
+        <p className="text-sm text-base-content/60 m-0">
+          Add HBAR to a side. When the market settles, the winning side splits both pools.
+        </p>
+      ) : (
+        <p className="text-sm font-semibold text-base-content/70 m-0">Take a side</p>
+      )}
       <div className="grid grid-cols-2 gap-2 mt-3" role="radiogroup" aria-label="Outcome">
         <button
           role="radio"

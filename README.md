@@ -10,13 +10,13 @@ Live demo on Hedera testnet: [predera.vercel.app](https://predera.vercel.app). I
 
 ![Market 0 on testnet: the scheduled call found no Chainlink round, booked two retries on its own, and the second retry settled YES. Every step is in the activity panel with a Hashscan link](docs/screenshots/market-detail.png)
 
-Demo video (100 s, testnet, production build): [docs/predera-demo.mp4](docs/predera-demo.mp4). More screenshots: [an open market with the payout preview](docs/screenshots/market-open.png), [market list](docs/screenshots/markets.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [light theme](docs/screenshots/market-detail-light.png). All are taken from the production build against the live testnet deployment.
+Demo video (100 s, testnet, production build): [docs/predera-demo.mp4](docs/predera-demo.mp4). More screenshots: [an open market with the payout preview](docs/screenshots/market-open.png), [its Trade tab with the implied chance](docs/screenshots/market-trade.png), [market list](docs/screenshots/markets.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [light theme](docs/screenshots/market-detail-light.png). All are taken from the production build against the live testnet deployment.
 
 ## What's in it
 
 One contract, `PredictionMarkets.sol`, holds every market. It creates two HTS tokens per market (YES and NO) and keeps the treasury, supply and wipe keys for them, so staking mints tokens and redeeming wipes them without an approve step. It books settlement through the Schedule Service at `0x16b` (HIP-1215) and settles on the first oracle price published at or after expiry, so nobody can bet on a price that is already known.
 
-The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (pool split, price chart, stake panel, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
+The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (pool split, price chart, one position card with Stake and Trade tabs, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
 
 Around it: 111 Foundry unit tests plus 5 invariants checked over random multi-market action sequences (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 242/242 lines, 90% branches), 83 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
 
@@ -169,8 +169,8 @@ Payout equals `amount * totalPool / winningPool` and is read from the contract's
 Staking is parimutuel: your HBAR joins the market's YES or NO pool and stays there until settlement. Because the position tokens are plain HTS tokens, anyone can also trade them on SaucerSwap V1, Hedera's main DEX, at any time before settlement. The contract is not involved: whoever holds a token when the market settles redeems it.
 
 - **Open a pool.** A holder of YES (or NO) tokens deposits tokens and HBAR with the router's `addLiquidityETHNewPool`. The deposit ratio sets the starting price, and the depositor receives the pool's LP token. SaucerSwap charges a fixed $2 pool fee: the factory reports it in tinycents (`pairCreateFee`) and the Hedera exchange-rate system contract (`0x168`, `tinycentsToTinybars`) converts it to HBAR, 19.66 HBAR when measured.
-- **Buy or sell.** The trade panel on the market page finds the pool through `factory.getPair(token, WHBAR)`, shows its price and reserves, quotes with the router's `getAmountsOut` and swaps with `swapExactETHForTokens` or `swapExactTokensForETH` at a 1% slippage floor. Selling needs an `approve` on the token first (HTS tokens have an ERC-20 facade).
-- **Odds you can read.** Stakes alone never price the outcome: they fix what a winning token pays, shown as a multiple on every card and market page (`1.60x` for 5 HBAR on YES against 3 on NO). The SaucerSwap price is what traders pay for a token right now, and dividing it by that multiple gives the chance the market assigns: 0.7784 HBAR for a token that pays 1.60 reads as 49%. The trade panel shows that chance, and a pool depth table lists the average fill for 1, 10 and 50 HBAR trades on each side, computed from the pool's constant-product curve (the formula reproduces the e2e buy on testnet to the last unit).
+- **Buy or sell.** The Trade tab of the market page's position card (next to Stake, so both ways in sit in one place) finds the pool through `factory.getPair(token, WHBAR)`, shows its price and reserves, quotes with the router's `getAmountsOut` and swaps with `swapExactETHForTokens` or `swapExactTokensForETH` at a 1% slippage floor. Selling needs an `approve` on the token first (HTS tokens have an ERC-20 facade).
+- **Odds you can read.** Stakes alone never price the outcome: they fix what a winning token pays, shown as a multiple on every card and market page (`1.60x` for 5 HBAR on YES against 3 on NO). The SaucerSwap price is what traders pay for a token right now, and dividing it by that multiple gives the chance the market assigns: 0.7784 HBAR for a token that pays 1.60 reads as 49%. The Trade tab shows that chance, and a pool depth table lists the average fill for 1, 10 and 50 HBAR trades on each side, computed from the pool's constant-product curve (the formula reproduces the e2e buy on testnet to the last unit).
 
 Measured on testnet (`yarn foundry:e2e:testnet` runs all three steps):
 
@@ -210,7 +210,7 @@ Staking is parimutuel, not an order book: one position token is minted per HBAR 
 
 ![Payouts for market 0: the YES staker redeems 8 HBAR if YES wins, the NO staker 8 if NO wins, and both get their stake back on a void. A YES token pays total pool divided by YES pool, 1.6x for market 0, and the multiple falls as more HBAR joins the winning side.](docs/img/payoff.svg)
 
-A position token is not a fixed 1 HBAR claim: its value at settlement depends on how the pool ends up split. That is why the stake panel labels its "pays if this side wins" figure as an estimate, and why a SaucerSwap price for a token can sit above 1 HBAR.
+A position token is not a fixed 1 HBAR claim: its value at settlement depends on how the pool ends up split. That is why the Stake tab labels its "pays if this side wins" figure as an estimate, and why a SaucerSwap price for a token can sit above 1 HBAR.
 
 ### Units (tinybar vs weibar)
 
@@ -293,7 +293,7 @@ packages/nextjs/
   app/llms.txt/route.ts             Plain-text guide for LLM agents, generated from the deployment
   app/api/record/route.ts           Publishes and reads HCS settlement records (server-only operator key)
   scripts/createRecordTopic.mjs     Creates the HCS record topic with the operator as submit key
-  components/markets/               MarketCard, StakePanel, TradePanel (SaucerSwap), RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, ui (shared badges and bars)
+  components/markets/               MarketCard, PositionCard (Stake and Trade tabs over StakePanel and TradePanel), RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, ui (shared badges and bars)
   styles/globals.css                Both daisyUI themes and the YES/NO colors: the whole look in one file
   utils/brand.ts                    App name, description and the theme colors that CSS cannot reach
   hooks/markets/                    useMarket, useMarkets, usePositions, useSaucerPool, useAccountExists, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate, useMarketActivity
@@ -429,7 +429,7 @@ The remaining low and informational results are deliberate: block timestamps dri
 | "Live price is unavailable" on the create form | Chainlink read failed or the feed address is wrong for the connected network | Check the network (testnet 296, mainnet 295), compare the address with `packages/foundry/script/HelperConfig.s.sol`, and retry. Creation still works with a manual strike |
 | Market stuck awaiting settlement | No Chainlink round at or after expiry exists yet, or retries ran out | Wait for the next retry, call `settle` once a round exists, or use the Pyth fallback. After the 24 hour grace period anyone can void |
 | "Settle with Pyth" button disabled or explains setup | `PYTH_API_KEY` is not set (Hermes requires an API key since 2026-08-26) | Set `PYTH_API_KEY` in `packages/nextjs/.env` and retry. Chainlink settlement and voiding work without it |
-| Stake reverts with `TokenTransferFailed(184)` | Response code 184 is `TOKEN_NOT_ASSOCIATED_TO_ACCOUNT`: the staker's account has no free auto-association slot and is not associated with the position token | Use the one-click association prompt in the stake panel, then stake again. First stake per token per account costs about 0.65 HBAR (auto-association) versus about 0.04 HBAR normally |
+| Stake reverts with `TokenTransferFailed(184)` | Response code 184 is `TOKEN_NOT_ASSOCIATED_TO_ACCOUNT`: the staker's account has no free auto-association slot and is not associated with the position token | Use the one-click association prompt in the Stake tab, then stake again. First stake per token per account costs about 0.65 HBAR (auto-association) versus about 0.04 HBAR normally |
 | Balance too low after using the faucet | The faucet gives 10 HBAR per day; a market needs about 23 HBAR in token fees plus an 8.5 HBAR reserve | Get a Hedera Portal testnet account (portal.hedera.com, 1000 HBAR per day) |
 | Wallet is on the wrong network | MetaMask points at mainnet or a local node while the app targets testnet | Switch the wallet to Hedera testnet (chain id 296, RPC https://testnet.hashio.io/api) and reload |
 
