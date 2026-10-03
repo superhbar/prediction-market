@@ -49,10 +49,9 @@ const PortfolioView = () => {
 
   if (!account) {
     return (
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-8">
-        <p className="text-sm text-base-content/60 mt-8 m-0">Portfolio</p>
-        <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Your positions</h1>
-        <div className="mt-8">
+      <div className="shell page">
+        <h1 className="text-2xl font-bold m-0">Portfolio</h1>
+        <div className="mt-6">
           <EmptyState title="No wallet connected" body="Connect a wallet to see positions across markets." />
         </div>
       </div>
@@ -62,10 +61,9 @@ const PortfolioView = () => {
   const loading = positionsLoading || marketsLoading;
 
   return (
-    <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-8">
-      <p className="text-sm text-base-content/60 mt-8 m-0">Portfolio</p>
-      <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Your positions</h1>
-      <div className="mt-8">
+    <div className="shell page">
+      <h1 className="text-2xl font-bold m-0">Portfolio</h1>
+      <div className="mt-6">
         {loading ? (
           <div className="h-32 panel animate-pulse" aria-hidden />
         ) : positions.length === 0 ? (

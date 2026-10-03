@@ -114,8 +114,8 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
           </linearGradient>
         </defs>
         <path d={area} fill="url(#price-area)" />
-        <path d={line} fill="none" stroke="var(--color-secondary)" strokeWidth="2.5" />
-        <circle cx={x(points.length - 1)} cy={lastY} r="5" fill="var(--color-secondary)" />
+        <path d={line} fill="none" stroke="var(--color-primary)" strokeWidth="2.5" />
+        <circle cx={x(points.length - 1)} cy={lastY} r="5" fill="var(--color-primary)" />
       </svg>
       <p className="text-sm text-base-content/60 mt-3 mb-0">
         {points.length} Chainlink rounds, latest <strong>{formatPrice(last.normalized)}</strong> against a strike of{" "}

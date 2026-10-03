@@ -62,7 +62,7 @@ const Home = () => {
     }`;
 
   return (
-    <div className="max-w-[1240px] mx-auto px-4 sm:px-6 w-full pt-8 pb-12">
+    <div className="shell page">
       {FEED_KEYS.map(feed => (
         <FeedReader key={feed} feed={feed} onPoints={onPoints} />
       ))}

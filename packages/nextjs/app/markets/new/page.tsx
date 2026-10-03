@@ -123,110 +123,111 @@ const NewMarketPage = () => {
   };
 
   return (
-    <div className="max-w-[720px] mx-auto px-4 sm:px-6 w-full pb-8">
-      <p className="text-sm text-base-content/60 mt-8 m-0">New market</p>
-      <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Open a market</h1>
-      <p className="mt-3 text-base-content/70">
-        Pick a feed, set the strike and expiry. Creation books the settlement schedule and mints both position tokens.
-      </p>
+    <div className="shell page">
+      <div className="max-w-2xl">
+        <h1 className="text-2xl font-bold m-0">Create market</h1>
+        <p className="mt-2 mb-0 text-base-content/60">
+          Pick a feed, set the strike and expiry. Creation books the settlement schedule and mints both position tokens.
+        </p>
 
-      <div className="panel p-5 md:p-7 mt-8 space-y-6">
-        <div>
-          <label className="text-sm font-medium block mb-2" htmlFor="feed">
-            Price feed
-          </label>
-          <select id="feed" className="select w-full" value={feed} onChange={event => setFeed(event.target.value)}>
-            {FEED_KEYS.map(key => (
-              <option key={key} value={key}>
-                {key}
-              </option>
-            ))}
-          </select>
+        <div className="panel p-5 md:p-6 mt-6 space-y-5">
+          <div>
+            <label className="text-sm font-medium block mb-2" htmlFor="feed">
+              Price feed
+            </label>
+            <select id="feed" className="select w-full" value={feed} onChange={event => setFeed(event.target.value)}>
+              {FEED_KEYS.map(key => (
+                <option key={key} value={key}>
+                  {key}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-2" htmlFor="strike">
+              Strike (USD)
+            </label>
+            <input
+              id="strike"
+              className="input w-full text-lg font-semibold tabular-nums"
+              value={strikeValue}
+              inputMode="decimal"
+              placeholder={priceLoading ? "Reading live price…" : "0.30"}
+              onChange={event => {
+                setStrike(event.target.value);
+                setStrikeTouched(true);
+              }}
+            />
+            <p className="text-sm text-base-content/60 mt-2 mb-0">
+              {currentPrice ? (
+                <>Live Chainlink price: {formatPrice(currentPrice.normalized)}.</>
+              ) : priceLoading ? (
+                "Reading the live on-chain price…"
+              ) : (
+                "Live price is unavailable. Enter a strike by hand."
+              )}{" "}
+              YES wins at or above strike.
+            </p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-2" htmlFor="expiry">
+              Expiry
+            </label>
+            <input
+              id="expiry"
+              type="datetime-local"
+              className="input w-full"
+              value={expiryValue}
+              min={mounted && bounds ? toInputValue(bounds.min) : undefined}
+              max={mounted && bounds ? toInputValue(bounds.max) : undefined}
+              onChange={event => setExpiryInput(event.target.value)}
+            />
+            <p className="text-sm text-base-content/60 mt-2 mb-0">
+              {config ? (
+                <>
+                  Between {Number(config.minDuration) / 60} minutes and {Number(config.maxDuration) / 86400} days from
+                  now. Minimum reserve {tinybarToHbar(config.minReserve)} HBAR.
+                </>
+              ) : (
+                "Loading limits…"
+              )}
+            </p>
+            {expiryError && <p className="text-sm text-error mt-1">{expiryError}</p>}
+          </div>
+
+          <div>
+            <label className="text-sm font-medium block mb-2" htmlFor="value">
+              Payment (HBAR)
+            </label>
+            <input
+              id="value"
+              className="input w-full text-lg font-semibold tabular-nums"
+              value={paymentValue}
+              inputMode="decimal"
+              placeholder={estimateLoading ? "Estimating…" : suggestedHbar}
+              onChange={event => {
+                setValueHbar(event.target.value);
+                setValueTouched(true);
+              }}
+            />
+            <p className="text-sm text-base-content/60 mt-2 mb-0">
+              {hbarPerUsd !== undefined ? (
+                <>
+                  Covers two token creations at {hbarPerUsd.toFixed(2)} HBAR per $1, plus the settlement reserve. You
+                  can edit it.
+                </>
+              ) : (
+                "Estimate is loading. You can edit the amount."
+              )}
+            </p>
+          </div>
+
+          <button className="btn btn-primary w-full" onClick={create} disabled={!canSubmit || isMining}>
+            {isMining ? "Creating…" : "Create market"}
+          </button>
         </div>
-
-        <div>
-          <label className="text-sm font-medium block mb-2" htmlFor="strike">
-            Strike (USD)
-          </label>
-          <input
-            id="strike"
-            className="input w-full text-lg font-semibold tabular-nums"
-            value={strikeValue}
-            inputMode="decimal"
-            placeholder={priceLoading ? "Reading live price…" : "0.30"}
-            onChange={event => {
-              setStrike(event.target.value);
-              setStrikeTouched(true);
-            }}
-          />
-          <p className="text-sm text-base-content/60 mt-2 mb-0">
-            {currentPrice ? (
-              <>Live Chainlink price: {formatPrice(currentPrice.normalized)}.</>
-            ) : priceLoading ? (
-              "Reading the live on-chain price…"
-            ) : (
-              "Live price is unavailable. Enter a strike by hand."
-            )}{" "}
-            YES wins at or above strike.
-          </p>
-        </div>
-
-        <div>
-          <label className="text-sm font-medium block mb-2" htmlFor="expiry">
-            Expiry
-          </label>
-          <input
-            id="expiry"
-            type="datetime-local"
-            className="input w-full"
-            value={expiryValue}
-            min={mounted && bounds ? toInputValue(bounds.min) : undefined}
-            max={mounted && bounds ? toInputValue(bounds.max) : undefined}
-            onChange={event => setExpiryInput(event.target.value)}
-          />
-          <p className="text-sm text-base-content/60 mt-2 mb-0">
-            {config ? (
-              <>
-                Between {Number(config.minDuration) / 60} minutes and {Number(config.maxDuration) / 86400} days from
-                now. Minimum reserve {tinybarToHbar(config.minReserve)} HBAR.
-              </>
-            ) : (
-              "Loading limits…"
-            )}
-          </p>
-          {expiryError && <p className="text-sm text-error mt-1">{expiryError}</p>}
-        </div>
-
-        <div>
-          <label className="text-sm font-medium block mb-2" htmlFor="value">
-            Payment (HBAR)
-          </label>
-          <input
-            id="value"
-            className="input w-full text-lg font-semibold tabular-nums"
-            value={paymentValue}
-            inputMode="decimal"
-            placeholder={estimateLoading ? "Estimating…" : suggestedHbar}
-            onChange={event => {
-              setValueHbar(event.target.value);
-              setValueTouched(true);
-            }}
-          />
-          <p className="text-sm text-base-content/60 mt-2 mb-0">
-            {hbarPerUsd !== undefined ? (
-              <>
-                Covers two token creations at {hbarPerUsd.toFixed(2)} HBAR per $1, plus the settlement reserve. You can
-                edit it.
-              </>
-            ) : (
-              "Estimate is loading. You can edit the amount."
-            )}
-          </p>
-        </div>
-
-        <button className="btn btn-primary w-full" onClick={create} disabled={!canSubmit || isMining}>
-          {isMining ? "Creating…" : "Create market"}
-        </button>
       </div>
     </div>
   );

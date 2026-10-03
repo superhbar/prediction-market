@@ -30,7 +30,7 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
 
   if (isLoading) {
     return (
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-16">
+      <div className="shell page">
         <MarketDetailSkeleton />
       </div>
     );
@@ -38,7 +38,7 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
 
   if (error && !market) {
     return (
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-16 mt-10">
+      <div className="shell page">
         <ErrorState
           message="The market could not be read from the network. Check the RPC and retry."
           onRetry={refetch}
@@ -49,8 +49,8 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
 
   if (invalid || notFound || !market) {
     return (
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-16">
-        <p className="text-sm text-base-content/60 mt-8 m-0">Market #{id}</p>
+      <div className="shell page">
+        <p className="text-sm text-base-content/60 m-0">Market #{id}</p>
         <h1 className="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Market not found</h1>
         <p className="mt-4 text-[15px] opacity-80">No market with this id exists on this network.</p>
         <Link href="/" className="btn btn-primary btn-sm mt-6">
@@ -69,8 +69,8 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
   );
 
   return (
-    <div className="max-w-[1240px] mx-auto px-4 sm:px-6 w-full pb-8">
-      <Link href="/" className="inline-block mt-6 text-sm text-base-content/60 hover:text-base-content">
+    <div className="shell page">
+      <Link href="/" className="inline-block text-sm text-base-content/60 hover:text-base-content">
         &larr; Markets
       </Link>
       <div className="mt-4 flex items-start gap-4">

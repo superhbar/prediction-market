@@ -19,8 +19,8 @@ export const Footer = () => {
   const { price: hbarPrice } = useFetchHbarPrice();
 
   return (
-    <footer className="border-t border-base-content/10 mt-16">
-      <div className="max-w-[1200px] mx-auto px-4 sm:px-6 py-6 flex flex-col md:flex-row gap-4 md:items-center justify-between text-sm">
+    <footer className="border-t border-base-300">
+      <div className="shell py-6 flex flex-col md:flex-row gap-4 md:items-center justify-between text-sm">
         <div className="flex flex-wrap items-center gap-3 text-base-content/60">
           <span className="inline-flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-success" aria-hidden />

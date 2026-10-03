@@ -32,8 +32,8 @@
 
   --color-primary: #6b8afd;
   --color-primary-content: #ffffff;
-  --color-secondary: #aebfff;
-  --color-secondary-content: #0f1729;
+  --color-secondary: #1f2a47;
+  --color-secondary-content: #eef2fb;
   --color-accent: #6b8afd;
   --color-accent-content: #ffffff;
   --color-neutral: #eef2fb;
@@ -63,8 +63,8 @@
 
   --color-primary: #4f6ef7;
   --color-primary-content: #ffffff;
-  --color-secondary: #3550c9;
-  --color-secondary-content: #ffffff;
+  --color-secondary: #e8ecf8;
+  --color-secondary-content: #0f1729;
   --color-accent: #4f6ef7;
   --color-accent-content: #ffffff;
   --color-neutral: #0f1729;
@@ -99,6 +99,33 @@
   --no: #e04848;
 }
 
+/*
+  The scaffold Debug Contracts package (@scaffold-hbar-ui/debug-contracts) styles itself with its own
+  --color-sui-* tokens keyed to a "dark" theme name. Map them onto this app's themes so /debug follows
+  whatever palette is set above.
+*/
+[data-theme="hedera"],
+[data-theme="hedera"] *,
+[data-theme="hedera-light"],
+[data-theme="hedera-light"] * {
+  --color-sui-primary: var(--color-primary);
+  --color-sui-primary-content: var(--color-primary-content);
+  --color-sui-primary-subtle: var(--color-base-300);
+  --color-sui-primary-neutral: var(--color-base-200);
+  --color-sui-accent: var(--color-accent);
+  --color-sui-base-100: var(--color-base-100);
+  --color-sui-base-content: var(--color-base-content);
+  --color-sui-neutral: var(--color-base-content);
+  --color-sui-neutral-content: var(--color-base-100);
+  --color-sui-input-text: var(--color-base-content);
+  --color-sui-input-placeholder: color-mix(in oklab, var(--color-base-content) 45%, transparent);
+  --color-sui-input-background: var(--color-base-200);
+  --color-sui-input-border: var(--color-base-300);
+  --color-sui-input-border-disabled: var(--color-base-300);
+  --color-sui-skeleton-base: var(--color-base-300);
+  --color-sui-skeleton-highlight: var(--color-base-100);
+}
+
 @layer base {
   *,
   ::after,
@@ -114,6 +141,32 @@
     font-size: 14px;
     background-color: var(--color-base-200);
   }
+}
+
+/* Layout: one content width for the header, every page and the footer, so all left edges line up. */
+.shell {
+  width: 100%;
+  max-width: 1240px;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .shell {
+    padding-inline: 1.5rem;
+  }
+}
+
+/* Page body: the shell plus the same top and bottom spacing on every route. */
+.page {
+  padding-block: 2rem 4rem;
+}
+
+/* The Debug Contracts package centers itself in its own max-w-6xl box; let it use the page shell instead. */
+.debug-flush .max-w-6xl.mx-auto {
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: 0;
 }
 
 /* Card surface used across the app: flat, one border, no shadow. */

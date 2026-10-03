@@ -82,7 +82,7 @@ export const Header = () => {
 
   return (
     <header className="sticky top-0 z-20 border-b border-base-300 bg-base-200">
-      <div className="max-w-[1240px] mx-auto h-[60px] px-4 sm:px-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+      <div className="shell h-[60px] grid grid-cols-[1fr_auto_1fr] items-center gap-3">
         <div className="flex items-center gap-2">
           <details className="dropdown lg:hidden" ref={burgerMenuRef}>
             <summary className="btn btn-ghost btn-sm px-2" aria-label="Menu">
