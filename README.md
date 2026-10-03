@@ -190,7 +190,7 @@ Each closed market can get a permanent public record on the Hedera Consensus Ser
 - `GET /api/record?marketId=0` returns the record with its sequence number and consensus time. Readers take the first record per market in consensus order, so even two simultaneous publishes leave one answer.
 - The topic is created with the operator's key as submit key (`node packages/nextjs/scripts/createRecordTopic.mjs`), so only the app's server can write to it. The record format lives in `utils/markets/record.ts` with its tests.
 
-It is optional and server-only: set `HCS_RECORD_TOPIC_ID` to show records, and `HEDERA_OPERATOR_ID` plus `HEDERA_OPERATOR_KEY` to publish. Without them the panel is hidden and everything else works. The live demo publishes to topic [0.0.10842885](https://hashscan.io/testnet/topic/0.0.10842885).
+It is optional and server-only: set `HCS_RECORD_TOPIC_ID` to show records, and `HEDERA_OPERATOR_ID` plus `HEDERA_OPERATOR_KEY` to publish. Without them the panel is hidden and everything else works. The live demo publishes to topic [0.0.10842926](https://hashscan.io/testnet/topic/0.0.10842926).
 
 ### Read API for scripts and agents
 
