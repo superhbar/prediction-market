@@ -41,7 +41,7 @@ export function useChainlinkHistory(feedLabel: string): {
   error: string | null;
 } {
   const { targetNetwork } = useTargetNetwork();
-  const { chainlink } = useFeedInfo(feedLabel);
+  const { chainlink, error: feedError, isLoading: feedLoading } = useFeedInfo(feedLabel);
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
   const [tick, setTick] = useState(0);
   const base = chainlink && chainlink !== ZERO_ADDRESS ? `${targetNetwork.id}:${chainlink}` : "";
@@ -96,10 +96,10 @@ export function useChainlinkHistory(feedLabel: string): {
         }
       } catch {
         if (!cancelled) {
-          // A failed refresh keeps the rounds already shown; only a first load with nothing to show errors.
+          // Keep useful cached rounds, but report the failed refresh until a read succeeds.
           setSnapshot(previous =>
             previous.key.startsWith(`${base}:`) && previous.points.length > 0
-              ? { ...previous, key }
+              ? { ...previous, key, error: "Price refresh failed." }
               : { key, points: [], decimals: undefined, error: "Price history is unavailable." },
           );
         }
@@ -125,7 +125,7 @@ export function useChainlinkHistory(feedLabel: string): {
     points,
     decimals: sameFeed ? snapshot.decimals : undefined,
     currentPrice: points.length > 0 ? points[points.length - 1] : undefined,
-    isLoading: base !== "" && !current && !sameFeed,
-    error: current ? snapshot.error : null,
+    isLoading: feedLoading || (base !== "" && !current && !sameFeed),
+    error: feedError ? "Oracle feed could not be read." : sameFeed ? snapshot.error : null,
   };
 }
