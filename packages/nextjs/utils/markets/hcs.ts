@@ -1,7 +1,7 @@
+import { mirrorBaseForChain } from "./hashscan";
+import type { MirrorTopicMessage } from "./record";
 import { AccountId, Client, PrivateKey } from "@hashgraph/sdk";
 import { hedera } from "viem/chains";
-import { mirrorBaseForChain } from "~~/utils/markets/hashscan";
-import type { MirrorTopicMessage } from "~~/utils/markets/record";
 
 /** Server-only HCS settings. The topic alone enables reading; publishing also needs the operator. */
 export function hcsSettings() {
@@ -23,22 +23,25 @@ export function operatorClient(chainId: number, operatorId: string, operatorKey:
   return client.setOperator(AccountId.fromString(operatorId), parseOperatorKey(operatorKey));
 }
 
-/** Reads a topic's messages from the mirror node, oldest first, following pagination up to `maxPages`. */
+/**
+ * Reads a topic's messages from the mirror node, oldest first, following pagination up to `maxPages`.
+ * `complete` is false when the topic has more messages than were read, so "no record found" is not proof.
+ */
 export async function fetchTopicMessages(
   chainId: number,
   topicId: string,
-  maxPages = 10,
-): Promise<MirrorTopicMessage[]> {
+  maxPages = 50,
+): Promise<{ messages: MirrorTopicMessage[]; complete: boolean }> {
   const base = mirrorBaseForChain(chainId);
   const messages: MirrorTopicMessage[] = [];
   let path: string | null = `/api/v1/topics/${topicId}/messages?limit=100&order=asc`;
   for (let page = 0; path && page < maxPages; page++) {
     const response = await fetch(`${base}${path}`, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
-    if (response.status === 404) return messages;
+    if (response.status === 404) return { messages, complete: true };
     if (!response.ok) throw new Error(`Mirror node request failed: ${response.status}`);
     const data = (await response.json()) as { messages?: MirrorTopicMessage[]; links?: { next?: string | null } };
     messages.push(...(data.messages ?? []));
     path = data.links?.next ?? null;
   }
-  return messages;
+  return { messages, complete: path === null };
 }

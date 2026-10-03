@@ -75,6 +75,6 @@ Measured on 2026-10-03 against router `0.0.19264`, factory `0.0.9959` and WHBAR 
 | Can an HTS position token with a wipe key be pooled? | Yes. `addLiquidityETHNewPool` created the pair and its LP token; buys and sells worked. |
 | Pool fee | `pairCreateFee()` returned 2e10 tinycents ($2). `tinycentsToTinybars` on `0x168` converted it to 1,966,297,658 tinybar (19.66 HBAR). The router keeps the fee from `msg.value` and adds the rest as liquidity. |
 | Gas to open a pool | 6,787,565. A 3.2M limit (SaucerSwap's documented value) reverted with `Safe multiple associations failed!` after the HTS association ran out of gas. |
-| Gas to buy and sell | 180,845 (HBAR to token), 873,472 (token to HBAR, including the WHBAR unwrap). |
+| Gas to buy and sell | 180,845 (HBAR to token), 873,472 (token to HBAR, including the WHBAR unwrap). Both measured from an account already holding the token. A buyer's first transfer of a token also auto-associates it (about 750k, see HTS above), so the frontend sends buys with 1.5M, the stake limit, and sells with 1.2M. |
 | WHBAR address | Pair paths need the WHBAR token `0.0.15058`. The router's `WHBAR()` returns the wrapper contract `0.0.15057`, and `getPair` with that address returns zero. |
 

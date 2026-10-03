@@ -17,9 +17,11 @@ export function deriveStatus(market: Market, nowSec: bigint, config: StatusConfi
   // Resolving only while a self-booked retry is still pending; once retries run out, anyone can settle.
   if (market.retriesLeft < config.maxRetries && market.schedulePending) return "retrying";
   if (roundAvailable === true) return "settle-available";
-  // Past maxRoundLag no later Chainlink round can qualify: only the Pyth fallback or a void remain.
-  if (nowSec >= market.expiry + config.maxRoundLag) return "no-price";
-  if (roundAvailable === false) return "awaiting-settlement";
+  // Past maxRoundLag no later Chainlink round can qualify: only the Pyth fallback or a void remain. Only the
+  // contract's answer proves that; timing alone cannot rule out a round published inside the window.
+  if (roundAvailable === false) {
+    return nowSec >= market.expiry + config.maxRoundLag ? "no-price" : "awaiting-settlement";
+  }
   if (nowSec >= market.expiry + config.settlementDelay) return "settle-available";
   return "awaiting-settlement";
 }

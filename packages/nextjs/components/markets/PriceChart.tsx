@@ -69,9 +69,12 @@ export function PriceChart({
   // When the strike is the chart's maximum its label goes under the line, so it is not clipped.
   const strikeLabelY = strikeY < PAD + 16 ? strikeY + 18 : strikeY - 8;
   const settleIndex = settlementTime === undefined ? -1 : points.findIndex(point => point.timestamp === settlementTime);
-  const firstAfterExpiry = expiry === undefined ? undefined : points.find(point => point.timestamp >= expiry);
+  const firstVisibleAfterExpiry = expiry === undefined ? undefined : points.find(point => point.timestamp >= expiry);
   // Expired, but the feed has not published since: the price above is not the settlement price.
-  const waitingForRound = expired === true && settleIndex < 0 && firstAfterExpiry === undefined;
+  const waitingForRound = expired === true && settleIndex < 0 && firstVisibleAfterExpiry === undefined;
+  // The oldest visible round is only the first after expiry when the history reaches back past expiry.
+  const historyCoversExpiry = expiry !== undefined && points[0].timestamp < expiry;
+  const firstAfterExpiry = historyCoversExpiry ? firstVisibleAfterExpiry : undefined;
   // The feed did publish after expiry, but only after the window in which a round may settle the market.
   const roundTooLate =
     expired === true &&

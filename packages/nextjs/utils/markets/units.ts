@@ -29,8 +29,11 @@ export const GAS = {
   associate: 300_000,
   /** SaucerSwap V1, measured on testnet: opening a pool used 6.79M (3.2M from SaucerSwap's docs runs out). */
   openPool: 8_000_000,
-  /** Measured 0.18M for HBAR to position token. */
-  swapBuy: 500_000,
+  /**
+   * Measured 0.18M for HBAR to position token into an associated account. A buyer's first transfer of a token
+   * auto-associates it (about 0.75M, as for a first stake), so buys get the stake limit.
+   */
+  swapBuy: 1_500_000,
   /** Measured 0.87M for position token to HBAR (unwraps WHBAR). */
   swapSell: 1_200_000,
   /** ERC-20 approve on an HTS token for the SaucerSwap router. */

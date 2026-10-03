@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { Address } from "viem";
-import { useAccount, useWriteContract } from "wagmi";
-import { associateAbi } from "~~/hooks/markets/abis";
-import { useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-hbar";
-import { longZeroToEntityId, mirrorBaseForChain } from "~~/utils/markets/hashscan";
-import { fetchAccount, fetchAccountExists, fetchIsTokenAssociated } from "~~/utils/markets/mirror";
+import { useAccount } from "wagmi";
+import { AssociationPrompt } from "~~/components/markets/AssociationPrompt";
+import { useTokenAssociation } from "~~/hooks/markets/useTokenAssociation";
+import { useScaffoldWriteContract } from "~~/hooks/scaffold-hbar";
 import { isRefund } from "~~/utils/markets/status";
 import { type Market, MarketState, type UiStatus } from "~~/utils/markets/types";
 import {
@@ -30,12 +29,9 @@ type StakePanelProps = {
   embedded?: boolean;
 };
 
-type Association = "checking" | "ok" | "needs-association" | "unknown";
-
 /** Stake YES/NO with a projected payout, association check and explicit gas. */
 export function StakePanel({ marketId, market, status, initialSide = "YES", embedded = false }: StakePanelProps) {
   const { address: account } = useAccount();
-  const { targetNetwork } = useTargetNetwork();
   const [side, setSide] = useState<"YES" | "NO">(initialSide);
   const [amount, setAmount] = useState("100");
 
@@ -50,48 +46,11 @@ export function StakePanel({ marketId, market, status, initialSide = "YES", embe
   const tradingOpen = market.state === MarketState.Open && nowMs < Number(market.expiry) * 1000;
   const amountValid = isPositiveDecimal(amount);
   const amountTinybar = amountValid ? hbarToTinybar(amount) : undefined;
-  const assocKey = account && tradingOpen ? `${account}:${token}:${targetNetwork.id}` : "";
-  const [assocSnapshot, setAssocSnapshot] = useState<{ key: string; value: Association }>({
-    key: "",
-    value: "unknown",
-  });
-
   const { writeContractAsync, isMining: isStaking } = useScaffoldWriteContract({
     contractName: "PredictionMarkets",
     disableSimulate: true,
   });
-  const { writeContractAsync: writeTokenAsync, isPending: isAssociating } = useWriteContract();
-
-  useEffect(() => {
-    if (!assocKey || assocSnapshot.key === assocKey) return;
-    const tokenId = longZeroToEntityId(token);
-    if (!tokenId || !account) return;
-    let cancelled = false;
-    const mirror = mirrorBaseForChain(targetNetwork.id);
-    const accountAddress = account;
-    // An address with no Hedera account yet gets one with unlimited automatic associations when it is first
-    // funded, so there is nothing to associate, and its mirror lookups would only 404.
-    fetchAccountExists(targetNetwork.id, accountAddress)
-      .then(exists =>
-        exists
-          ? Promise.all([fetchAccount(mirror, accountAddress), fetchIsTokenAssociated(mirror, accountAddress, tokenId)])
-          : null,
-      )
-      .then(result => {
-        if (cancelled) return;
-        const needsAssociation = result !== null && result[0].maxAutomaticTokenAssociations === 0 && !result[1];
-        setAssocSnapshot({ key: assocKey, value: needsAssociation ? "needs-association" : "ok" });
-      })
-      .catch(() => {
-        if (!cancelled) setAssocSnapshot({ key: assocKey, value: "unknown" });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [assocKey, assocSnapshot.key, token, account, targetNetwork.id]);
-
-  const association: Association =
-    assocSnapshot.key === assocKey && assocKey !== "" ? assocSnapshot.value : assocKey !== "" ? "checking" : "unknown";
+  const { association, associate, isAssociating } = useTokenAssociation(token, tradingOpen);
 
   const stake = async () => {
     if (!amountValid || amountTinybar === undefined) {
@@ -107,22 +66,6 @@ export function StakePanel({ marketId, market, status, initialSide = "YES", embe
       });
     } catch {
       // Notification is handled by the scaffold transactor.
-    }
-  };
-
-  const associate = async () => {
-    if (!assocKey) return;
-    try {
-      await writeTokenAsync({
-        address: token,
-        abi: associateAbi,
-        functionName: "associate",
-        gas: BigInt(GAS.associate),
-      });
-      setAssocSnapshot({ key: assocKey, value: "ok" });
-      notification.success("Token associated. You can stake now.");
-    } catch {
-      notification.error("Association failed. Try again.");
     }
   };
 
@@ -224,12 +167,7 @@ export function StakePanel({ marketId, market, status, initialSide = "YES", embe
 
       {!account && <p className="text-sm mt-3 text-base-content/60">Connect a wallet to stake.</p>}
       {association === "needs-association" && (
-        <div className="mt-3 text-sm rounded-xl bg-warning/10 p-3">
-          <p className="m-0 text-base-content/80">This account is not associated with the {side} token yet.</p>
-          <button className="btn btn-sm btn-outline mt-2" onClick={associate} disabled={isAssociating}>
-            {isAssociating ? "Associating…" : "Associate token"}
-          </button>
-        </div>
+        <AssociationPrompt side={side} onAssociate={associate} isAssociating={isAssociating} />
       )}
 
       <button

@@ -3,8 +3,10 @@
 import { useState } from "react";
 import type { Address } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
+import { AssociationPrompt } from "~~/components/markets/AssociationPrompt";
 import { useNow } from "~~/hooks/markets/useNow";
 import { useSaucerPool } from "~~/hooks/markets/useSaucerPool";
+import { useTokenAssociation } from "~~/hooks/markets/useTokenAssociation";
 import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-hbar";
 import { hashscanLink } from "~~/utils/markets/hashscan";
 import {
@@ -163,6 +165,9 @@ function SwapForm({
   const [amount, setAmount] = useState("1");
   const { writeContractAsync, isPending } = useWriteContract();
   const transact = useTransactor();
+  // A buy sends the token to the buyer, which fails when the account has no free association slot.
+  const { association, associate, isAssociating } = useTokenAssociation(token, mode === "buy");
+  const blockedByAssociation = mode === "buy" && association === "needs-association";
 
   const amountValid = isPositiveDecimal(amount);
   // Position tokens and tinybar both have 8 decimals, so one parser serves both directions.
@@ -280,9 +285,10 @@ function SwapForm({
               : formatHbar(minimumOut(quoted))}
         </dd>
       </dl>
+      {blockedByAssociation && <AssociationPrompt side={side} onAssociate={associate} isAssociating={isAssociating} />}
       <button
         className="btn btn-primary w-full mt-4"
-        disabled={!account || !amountValid || quoted === undefined || isPending}
+        disabled={!account || !amountValid || quoted === undefined || isPending || blockedByAssociation}
         onClick={submit}
       >
         {isPending

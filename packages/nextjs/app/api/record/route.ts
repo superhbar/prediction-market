@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
 import { TopicMessageSubmitTransaction } from "@hashgraph/sdk";
 import { fetchTopicMessages, hcsSettings, operatorClient } from "~~/utils/markets/hcs";
-import { buildRecord, findRecord, isRecordable } from "~~/utils/markets/record";
+import { type SettlementRecord, buildRecord, findRecord, isRecordable } from "~~/utils/markets/record";
 import { readMarkets } from "~~/utils/markets/serverReads";
+
+type Published = { record: SettlementRecord; sequenceNumber: number; transactionId: string };
+
+/**
+ * Publishes started or finished by this server instance, by chain, contract and market. Concurrent requests for one
+ * market share a single submission, and a finished one answers repeat requests before the mirror node indexes
+ * it. Separate instances can still both publish; readers take the first record by sequence number, so a
+ * duplicate costs one message fee and changes nothing.
+ */
+const publishes = new Map<string, Promise<Published>>();
 
 /** Reads `?marketId=` from a request, or null when it is not a non-negative integer. */
 function marketIdOf(value: string | null | undefined): number | null {
@@ -23,7 +33,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "marketId must be a non-negative integer." }, { status: 400 });
   try {
     const { chainId, contract } = await readMarkets(() => []);
-    const record = findRecord(await fetchTopicMessages(chainId, topicId), chainId, contract, marketId);
+    const { messages } = await fetchTopicMessages(chainId, topicId);
+    const record = findRecord(messages, chainId, contract, marketId);
     return NextResponse.json({ enabled: true, topicId, canPublish, record });
   } catch {
     return NextResponse.json({ error: "Could not read the record topic." }, { status: 502 });
@@ -46,7 +57,6 @@ export async function POST(request: Request) {
   if (marketId === null)
     return NextResponse.json({ error: "marketId must be a non-negative integer." }, { status: 400 });
 
-  let client;
   try {
     const { chainId, contract, config, markets } = await readMarkets(() => [marketId]);
     if (markets.length === 0)
@@ -55,27 +65,43 @@ export async function POST(request: Request) {
     if (!isRecordable(market)) {
       return NextResponse.json({ error: "Only settled or voided markets are recorded." }, { status: 409 });
     }
-    const existing = findRecord(await fetchTopicMessages(chainId, topicId), chainId, contract, marketId);
+    const key = `${chainId}:${contract.toLowerCase()}:${marketId}`;
+    const pending = publishes.get(key);
+    if (pending) return NextResponse.json({ record: await pending, created: false });
+
+    const { messages, complete } = await fetchTopicMessages(chainId, topicId);
+    const existing = findRecord(messages, chainId, contract, marketId);
     if (existing) return NextResponse.json({ record: existing, created: false });
+    // Not finding a record in a partly read topic proves nothing, so do not pay for a possible duplicate.
+    if (!complete) {
+      return NextResponse.json(
+        { error: "The record topic is too long to check for an existing record." },
+        { status: 503 },
+      );
+    }
 
     const record = buildRecord(chainId, contract, marketId, market, BigInt(Math.floor(Date.now() / 1000)), config);
-    client = operatorClient(chainId, operatorId, operatorKey);
-    const response = await new TopicMessageSubmitTransaction()
-      .setTopicId(topicId)
-      .setMessage(JSON.stringify(record))
-      .execute(client);
-    const receipt = await response.getReceipt(client);
-    return NextResponse.json({
-      record: {
-        record,
-        sequenceNumber: Number(receipt.topicSequenceNumber),
-        transactionId: response.transactionId.toString(),
-      },
-      created: true,
-    });
+    const publish = submit(chainId, topicId, operatorId, operatorKey, JSON.stringify(record)).then(sent => ({
+      record,
+      ...sent,
+    }));
+    publishes.set(key, publish);
+    // A failed submission must not block a later retry.
+    publish.catch(() => publishes.delete(key));
+    return NextResponse.json({ record: await publish, created: true });
   } catch {
     return NextResponse.json({ error: "Could not publish the record." }, { status: 502 });
+  }
+}
+
+/** Submits one message to the topic, paid by the operator, and waits for its receipt. */
+async function submit(chainId: number, topicId: string, operatorId: string, operatorKey: string, message: string) {
+  const client = operatorClient(chainId, operatorId, operatorKey);
+  try {
+    const response = await new TopicMessageSubmitTransaction().setTopicId(topicId).setMessage(message).execute(client);
+    const receipt = await response.getReceipt(client);
+    return { sequenceNumber: Number(receipt.topicSequenceNumber), transactionId: response.transactionId.toString() };
   } finally {
-    client?.close();
+    client.close();
   }
 }

@@ -63,8 +63,9 @@ describe("deriveStatus", () => {
 
   it("reports no-price once the round window has passed without an eligible round", () => {
     const idle = market({ retriesLeft: 0, schedulePending: false });
-    expect(deriveStatus(idle, 1_007_200n, config)).toBe("no-price");
     expect(deriveStatus(idle, 1_007_200n, config, false)).toBe("no-price");
+    // Without the contract's answer (list, API) a round inside the window may still exist, so settle stays open.
+    expect(deriveStatus(idle, 1_007_200n, config)).toBe("settle-available");
     // A round published inside the window can still be settled by hand after it closes.
     expect(deriveStatus(idle, 1_007_200n, config, true)).toBe("settle-available");
   });
