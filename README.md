@@ -18,7 +18,7 @@ One contract, `PredictionMarkets.sol`, holds every market. It creates two HTS to
 
 The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (pool split, price chart, stake panel, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
 
-Around it: 104 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 238/238 lines, 89% branches), 67 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
+Around it: 104 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 238/238 lines, 89% branches), 69 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
 
 ## What you get that is hard to build alone
 
@@ -28,7 +28,7 @@ Around it: 104 Foundry tests (HTS and the Schedule Service mocked, 100% line cov
 - **Accounting you can audit.** Payouts come only from recorded pools, a fuzz test proves winners never receive more than the pool, and `withdrawReserve` can only pay out surplus beyond what traders and other markets are owed. A scheduled call never reverts on a handled path, because Hedera bills a reverted scheduled execution anyway.
 - **Positions you can trade before settlement.** YES and NO are ordinary HTS tokens, so the market page opens a SaucerSwap V1 pool for either side and buys or sells against it, with quotes from the router and a 1% slippage floor. The pool fee is priced in dollars through Hedera's exchange-rate system contract, and the e2e script opens a pool, buys and sells on testnet. See [Trading before settlement](#trading-before-settlement-saucerswap).
 - **Hedera details already measured.** [docs/hedera-notes.md](docs/hedera-notes.md) records what was measured on testnet: tinybar inside the EVM vs weibar in wallets, the 0.65 HBAR first-stake association cost, scheduled-call gas and billing, why `forge script --broadcast` cannot reach Hashio, and the mirror node log filter that silently matches nothing.
-- **Proof at every level.** 104 Foundry tests with 100% line coverage of the production contracts, 67 vitest tests, an end-to-end script that runs create, stake, a SaucerSwap pool and trade, scheduled settlement, redeem and reserve withdrawal on real testnet, source verified on Sourcify, CI that scaffolds the template fresh with both npm and yarn, then lints, tests, builds, boots it and requests every core route, and a [live demo](https://predera.vercel.app).
+- **Proof at every level.** 104 Foundry tests with 100% line coverage of the production contracts, 69 vitest tests, an end-to-end script that runs create, stake, a SaucerSwap pool and trade, scheduled settlement, redeem and reserve withdrawal on real testnet, source verified on Sourcify, CI that scaffolds the template fresh with both npm and yarn, then lints, tests, builds, boots it and requests every core route, and a [live demo](https://predera.vercel.app).
 - **Ready for coding agents.** `AGENTS.md` lists the invariants an agent must not break, and `.harness/` ships a Hedera Harness recipe whose validators pass in freshly scaffolded npm and yarn projects. The market activity panel was built through that recipe.
 
 ## Quick start
@@ -177,6 +177,18 @@ Measured on testnet (`yarn foundry:e2e:testnet` runs all three steps):
 
 Pair paths use the WHBAR token `0.0.15058`; the router's `WHBAR()` returns the wrapper contract `0.0.15057`, which is not the token in the pair. Addresses live in `packages/nextjs/utils/markets/saucerswap.ts`.
 
+### Read API for scripts and agents
+
+The app serves a small read-only JSON API from the same Next.js server, so a script or an AI agent can follow markets without a wallet or an ABI:
+
+| Route | Returns |
+|---|---|
+| `GET /api/markets?limit=24` | Newest markets first (up to 100): question, strike, expiry, state, UI status, pools, reserve, token addresses, settlement and schedule |
+| `GET /api/markets/{id}` | One market, plus what one YES or NO token redeems for now, read from the contract's `quotePayout` |
+| `GET /llms.txt` | A plain-text guide for LLM agents: the deployment, the read routes, the write calls with their gas limits, and the rules to respect |
+
+Every amount comes as an exact tinybar string and a decimal HBAR string; prices are decimal USD. Try it on the live demo: [predera.vercel.app/api/markets](https://predera.vercel.app/api/markets) and [predera.vercel.app/llms.txt](https://predera.vercel.app/llms.txt). The routes read through the same relay as the app (`utils/markets/serverReads.ts`), and the JSON shape lives in `utils/markets/marketJson.ts` with its tests.
+
 ### How payouts work
 
 Staking is parimutuel, not an order book: one position token is minted per HBAR staked, whatever the pool split, and winners share the whole pool. Payout equals `amount * totalPool / winningPool`, quoted on chain by `quotePayout`. Worked example from market 0 on testnet (5 HBAR staked on YES, 3 HBAR on NO, settled YES): the YES staker redeemed 5 * 8 / 5 = 8 HBAR and the NO stake paid 0. If only one side has stakes, or the market is voided, every position redeems 1:1 for the HBAR staked.
@@ -257,6 +269,8 @@ packages/nextjs/
   app/markets/[id]/page.tsx         Market detail: pools, odds, countdowns, stake, settle, void, redeem
   app/portfolio/page.tsx            Positions across markets
   app/api/pyth/route.ts             Server-only Hermes proxy; PYTH_API_KEY never reaches the browser
+  app/api/markets/                  Read-only JSON API: market list and one market with its quotePayout
+  app/llms.txt/route.ts             Plain-text guide for LLM agents, generated from the deployment
   components/markets/               MarketCard, StakePanel, TradePanel (SaucerSwap), RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, ui (shared badges and bars)
   styles/globals.css                Both daisyUI themes and the YES/NO colors: the whole look in one file
   utils/brand.ts                    App name, description and the theme colors that CSS cannot reach

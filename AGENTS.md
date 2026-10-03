@@ -29,7 +29,7 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 - `packages/foundry/scripts-js/deployHedera.js`: `cast send --create` deploy, writes `broadcast/` + `deployments/`, then regenerates bindings.
 - `packages/foundry/scripts-js/e2eTestnet.js`: create, stake both sides, wait for scheduled settle, redeem, withdraw reserve.
 - `packages/foundry/test/`: `PredictionMarkets.t.sol`, `PriceMath.t.sol`, `HelperConfig.t.sol`, `mocks/` (etched at `0x167`/`0x16b`).
-- `packages/nextjs/app/`: `page.tsx` (list), `markets/new`, `markets/[id]`, `portfolio`, `api/pyth/route.ts` (server-only Hermes proxy).
+- `packages/nextjs/app/`: `page.tsx` (list), `markets/new`, `markets/[id]`, `portfolio`, `api/pyth/route.ts` (server-only Hermes proxy), `api/markets` and `llms.txt` (read-only JSON and agent guide; shape in `utils/markets/marketJson.ts`).
 - `packages/nextjs/components/markets/`: MarketCard, StakePanel, TradePanel (SaucerSwap), RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, `ui.tsx` (AssetBadge, StatusPill, OutcomeBar).
 - `packages/nextjs/styles/globals.css`: both daisyUI themes (`hedera` dark default, `hedera-light`) and `--color-yes`/`--color-no`. `utils/brand.ts`: app name and the hex colors CSS cannot reach.
 - `packages/nextjs/hooks/markets/`: useMarket(s), usePositions, useSaucerPool, useAccountExists, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate, useMarketActivity.
