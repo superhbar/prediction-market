@@ -13,7 +13,8 @@ export function deriveStatus(market: Market, nowSec: bigint, config: StatusConfi
   if (market.outcome !== MarketOutcome.Unresolved) return "settled";
   if (nowSec < market.expiry) return "open";
   if (nowSec >= market.expiry + config.gracePeriod) return "voidable";
-  if (market.retriesLeft < config.maxRetries) return "retrying";
+  // Retrying only while a self-booked retry is still pending; once retries run out, anyone can settle.
+  if (market.retriesLeft < config.maxRetries && market.schedulePending) return "retrying";
   if (nowSec >= market.expiry + config.settlementDelay) return "settle-available";
   return "awaiting-settlement";
 }

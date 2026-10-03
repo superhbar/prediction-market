@@ -1,95 +1,130 @@
 import Link from "next/link";
 import { Countdown } from "./Countdown";
-import { AssetBadge, OutcomeBar, StatusPill } from "./ui";
+import { AssetBadge, OutcomeBar, Sparkline, StatusPill } from "./ui";
+import type { PricePoint } from "~~/hooks/markets/useChainlinkHistory";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
-import { hashscanLink } from "~~/utils/markets/hashscan";
 import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
-import { type MarketFilter, resolutionLabel, statusLabel } from "~~/utils/markets/status";
+import { type MarketFilter, isRefund, resolutionLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
 import type { Market, UiStatus } from "~~/utils/markets/types";
-import { formatHbar, yesPercent } from "~~/utils/markets/units";
+import { formatExactPrice, formatHbar, yesPercent } from "~~/utils/markets/units";
 
 type MarketCardProps = {
   marketId: number;
   market: Market;
   status: UiStatus;
-  chainId: number;
+  /** Recent Chainlink rounds for this market's feed, drawn as a sparkline. */
+  points?: PricePoint[];
 };
 
-/** Market summary for the list grid: asset, question, YES/NO split, volume and timing. */
-export function MarketCard({ marketId, market, status, chainId }: MarketCardProps) {
+/** What a closed market is waiting for, or how it ended. */
+function closedNote(market: Market, status: UiStatus): { tone: "warning" | "neutral"; text: string } {
+  switch (status) {
+    case "awaiting-settlement":
+      return { tone: "warning", text: "Expired. Hedera runs the scheduled settlement shortly." };
+    case "retrying":
+      return { tone: "warning", text: "Expired. Settlement is waiting for the first Chainlink round after expiry." };
+    case "settle-available":
+      return { tone: "warning", text: "Expired. Anyone can settle once a Chainlink round is in." };
+    case "voidable":
+      return { tone: "warning", text: "No price in time. Anyone can void it for 1:1 refunds." };
+    default:
+      return {
+        tone: "neutral",
+        text: isRefund(market)
+          ? `${resolutionLabel(market)}. Every position redeems 1:1.`
+          : `${resolutionLabel(market)} at ${formatExactPrice(market.settlementPrice)} (${sourceLabel(market.source)}).`,
+      };
+  }
+}
+
+/** Market summary for the list grid: question, implied chance, buy buttons and timing. */
+export function MarketCard({ marketId, market, status, points = [] }: MarketCardProps) {
   const feedLabel = bytes32ToFeedKey(market.feedKey);
   const yes = yesPercent(market.yesPool, market.noPool);
   const yesRounded = Math.round(yes);
-  const closed = status !== "open";
+  const href = `/markets/${marketId}`;
+  const note = status === "open" ? undefined : closedNote(market, status);
 
   return (
-    // The card is a div with a stretched title link, so the Hashscan links are not nested inside another link.
-    <div className="panel relative p-5 flex flex-col gap-4 transition hover:border-primary/60 hover:shadow-[0_0_0_1px_var(--color-primary),0_20px_60px_-30px_var(--color-primary)]">
+    <article className="panel p-5 flex flex-col gap-4 transition-colors hover:border-primary/50">
       <div className="flex items-center gap-3">
         <AssetBadge feedLabel={feedLabel} />
-        <div className="min-w-0">
-          <p className="text-sm font-semibold m-0">{feedLabel}</p>
-          <p className="text-xs text-base-content/50 m-0">
-            #{marketId} &middot; {shortExpiry(market.expiry)}
-          </p>
-        </div>
+        <span className="text-sm text-base-content/70">{feedLabel.replace("/", " / ")}</span>
         <span className="ml-auto">
           <StatusPill status={status} label={status === "settled" ? resolutionLabel(market) : statusLabel(status)} />
         </span>
       </div>
 
-      <h2 className="text-[17px] font-semibold leading-snug m-0">
-        <Link href={`/markets/${marketId}`} className="after:absolute after:inset-0">
+      <h2 className="text-base font-semibold leading-snug m-0">
+        <Link href={href} className="hover:text-primary">
           {marketQuestion(feedLabel, market.strike, market.expiry)}
         </Link>
       </h2>
 
-      <div className="flex-1" />
-      <OutcomeBar yes={yes} />
-      <div className="grid grid-cols-2 gap-2 text-sm font-semibold">
-        <span className="rounded-xl bg-yes/10 text-yes px-3 py-2 flex justify-between">
-          <span>YES</span>
-          <span className="tabular-nums">{yesRounded}%</span>
-        </span>
-        <span className="rounded-xl bg-no/10 text-no px-3 py-2 flex justify-between">
-          <span>NO</span>
-          <span className="tabular-nums">{100 - yesRounded}%</span>
-        </span>
-      </div>
-
-      <div className="flex items-center justify-between text-xs text-base-content/60">
-        <span className="tabular-nums">{formatHbar(market.yesPool + market.noPool)} volume</span>
-        {closed ? (
-          <span className="flex gap-3">
-            <a
-              href={hashscanLink(chainId, "token", market.yesToken)}
-              target="_blank"
-              rel="noreferrer"
-              className="link relative z-10"
-            >
-              YES token
-            </a>
-            <a
-              href={hashscanLink(chainId, "token", market.noToken)}
-              target="_blank"
-              rel="noreferrer"
-              className="link relative z-10"
-            >
-              NO token
-            </a>
+      <div className="flex items-end justify-between gap-3 mt-auto">
+        <p className="m-0 flex items-baseline gap-1.5">
+          <span className={`text-3xl font-bold tabular-nums ${yesRounded >= 50 ? "text-yes" : "text-no"}`}>
+            {yesRounded}%
           </span>
-        ) : (
-          <Countdown targetSec={market.expiry} label="Closes in" />
-        )}
+          <span className="text-sm text-base-content/60">chance</span>
+        </p>
+        <Sparkline points={points} />
       </div>
-    </div>
+      <OutcomeBar yes={yes} />
+
+      {note ? (
+        <p
+          className={`m-0 rounded-[10px] border px-3 py-2.5 text-sm ${
+            note.tone === "warning"
+              ? "border-warning/30 bg-warning/10 text-base-content/80"
+              : "border-base-300 bg-base-200 text-base-content/80"
+          }`}
+        >
+          {note.text}{" "}
+          <Link href={href} className="font-semibold text-primary whitespace-nowrap">
+            {status === "settled" || status === "voided" ? "Redeem" : "Details"}
+          </Link>
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href={`${href}?side=yes`}
+            className="btn btn-sm h-10 text-sm font-semibold border-yes/30 bg-yes/10 text-yes hover:bg-yes/20 hover:border-yes/50"
+          >
+            Buy Yes {yesRounded}¢
+          </Link>
+          <Link
+            href={`${href}?side=no`}
+            className="btn btn-sm h-10 text-sm font-semibold border-no/30 bg-no/10 text-no hover:bg-no/20 hover:border-no/50"
+          >
+            Buy No {100 - yesRounded}¢
+          </Link>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 pt-3 border-t border-base-300 text-xs text-base-content/60">
+        <span>
+          <span className="font-semibold text-base-content tabular-nums">
+            {formatHbar(market.yesPool + market.noPool)}
+          </span>{" "}
+          vol
+        </span>
+        <span className="font-mono">
+          {status === "open" ? (
+            <Countdown targetSec={market.expiry} label="Closes in" />
+          ) : (
+            `Closed ${shortExpiry(market.expiry)}`
+          )}
+        </span>
+      </div>
+    </article>
   );
 }
 
 export const FILTERS: { value: MarketFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "open", label: "Open" },
-  { value: "awaiting", label: "Awaiting settlement" },
+  { value: "awaiting", label: "Settling" },
   { value: "settled", label: "Settled" },
   { value: "voided", label: "Voided" },
 ];

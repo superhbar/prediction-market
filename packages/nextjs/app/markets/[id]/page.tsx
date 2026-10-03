@@ -1,8 +1,15 @@
 import { MarketDetail } from "./MarketDetail";
 
-const MarketPage = async ({ params }: { params: Promise<{ id: string }> }) => {
+type MarketPageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ side?: string }>;
+};
+
+/** `?side=no` preselects NO in the stake panel, so "Buy No" on a market card lands ready to trade. */
+const MarketPage = async ({ params, searchParams }: MarketPageProps) => {
   const { id } = await params;
-  return <MarketDetail id={id} />;
+  const { side } = await searchParams;
+  return <MarketDetail id={id} initialSide={side === "no" ? "NO" : "YES"} />;
 };
 
 export default MarketPage;

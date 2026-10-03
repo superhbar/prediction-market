@@ -54,7 +54,7 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
   return (
     <section className="panel p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
-        <p className="label-caps m-0">{feedLabel} &middot; Chainlink</p>
+        <p className="text-sm font-semibold text-base-content/70 m-0">{feedLabel} &middot; Chainlink</p>
         <p className="m-0 text-2xl font-bold tabular-nums">{formatPrice(last.normalized)}</p>
       </div>
       <svg

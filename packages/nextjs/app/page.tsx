@@ -1,180 +1,183 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { FILTERS, MarketCard } from "~~/components/markets/MarketCard";
 import { EmptyState, ErrorState, MarketCardSkeleton } from "~~/components/markets/States";
+import { type PricePoint, useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
 import { useMarkets } from "~~/hooks/markets/useMarkets";
-import { useTargetNetwork } from "~~/hooks/scaffold-hbar";
+import { FEED_KEYS, bytes32ToFeedKey } from "~~/utils/markets/feeds";
+import { marketQuestion } from "~~/utils/markets/question";
 import { type MarketFilter, deriveStatus, matchesFilter } from "~~/utils/markets/status";
-import { formatHbar } from "~~/utils/markets/units";
+import { formatPrice } from "~~/utils/markets/units";
+
+/** Reads one feed's recent rounds and reports them up, so the page reads each feed once. */
+function FeedReader({ feed, onPoints }: { feed: string; onPoints: (feed: string, points: PricePoint[]) => void }) {
+  const { points } = useChainlinkHistory(feed);
+  useEffect(() => onPoints(feed, points), [feed, points, onPoints]);
+  return null;
+}
 
 const Home = () => {
-  const { targetNetwork } = useTargetNetwork();
   const { marketIds, markets, count, isLoading, error } = useMarkets();
   const { config } = useMarketConfig();
   const [filter, setFilter] = useState<MarketFilter>("all");
-
-  const [nowSec] = useState(() => BigInt(Math.floor(Date.now() / 1000)));
-  const visible = useMemo(
-    () =>
-      marketIds
-        .map((id, index) => ({ id, market: markets[index] ?? null }))
-        .filter(entry => entry.market !== null)
-        .filter(entry => {
-          if (!config || !entry.market) return true;
-          return matchesFilter(deriveStatus(entry.market, nowSec, config), filter);
-        }),
-    [marketIds, markets, config, nowSec, filter],
+  const [asset, setAsset] = useState<string>("all");
+  const [query, setQuery] = useState("");
+  const [history, setHistory] = useState<Record<string, PricePoint[]>>({});
+  const onPoints = useCallback(
+    (feed: string, points: PricePoint[]) =>
+      setHistory(previous => {
+        // The history hook can hand back a fresh empty array on every render; only store real changes.
+        const current = previous[feed];
+        const same =
+          current !== undefined &&
+          current.length === points.length &&
+          current.at(-1)?.roundId === points.at(-1)?.roundId;
+        return same ? previous : { ...previous, [feed]: points };
+      }),
+    [],
   );
 
-  const loaded = marketIds.flatMap((id, index) => (markets[index] ? [{ id, market: markets[index]! }] : []));
-  const stats = [
-    {
-      label: "Open markets",
-      value: config
-        ? String(loaded.filter(({ market }) => deriveStatus(market, nowSec, config) === "open").length)
-        : "-",
-    },
-    {
-      label: "Total volume",
-      value: formatHbar(loaded.reduce((sum, { market }) => sum + market.yesPool + market.noPool, 0n)),
-    },
-    { label: "Settled on-chain", value: String(loaded.filter(({ market }) => market.state !== 0).length) },
-  ];
+  const [nowSec] = useState(() => BigInt(Math.floor(Date.now() / 1000)));
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return marketIds.flatMap((id, index) => {
+      const market = markets[index];
+      if (!market) return [];
+      const feed = bytes32ToFeedKey(market.feedKey);
+      const status = config ? deriveStatus(market, nowSec, config) : "open";
+      if (!matchesFilter(status, filter)) return [];
+      if (asset !== "all" && feed !== asset) return [];
+      if (needle && !marketQuestion(feed, market.strike, market.expiry).toLowerCase().includes(needle)) return [];
+      return [{ id, market, feed, status }];
+    });
+  }, [marketIds, markets, config, nowSec, filter, asset, query]);
+
+  const chip = (active: boolean) =>
+    `rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+      active ? "bg-base-100 text-base-content" : "text-base-content/60 hover:text-base-content"
+    }`;
 
   return (
-    <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full">
-      <section className="pt-12 pb-10 md:pt-16">
-        <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary" aria-hidden />
-          Settled by Hedera scheduled transactions (HIP-1215)
-        </span>
-        <h1 className="mt-5 text-4xl md:text-6xl font-bold tracking-tight leading-[1.05] max-w-3xl">
-          Predict prices. <span className="text-brand">Hedera settles.</span>
-        </h1>
-        <p className="mt-5 text-base md:text-lg leading-relaxed max-w-2xl text-base-content/70">
-          Stake HBAR on YES or NO. Each market books its own settlement when it is created, then reads the first
-          Chainlink price at or after expiry. No keeper, no admin.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link href="/markets/new" className="btn btn-primary">
-            Create a market
-          </Link>
-          <a href="#markets" className="btn btn-ghost border border-base-content/15">
-            Browse markets
-          </a>
-        </div>
-        <dl className="mt-10 grid grid-cols-3 gap-3 max-w-xl">
-          {stats.map(stat => (
-            <div key={stat.label} className="panel px-4 py-3">
-              <dt className="label-caps">{stat.label}</dt>
-              <dd className="m-0 mt-1 text-xl font-semibold tabular-nums">{stat.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
+    <div className="max-w-[1240px] mx-auto px-4 sm:px-6 w-full pt-8 pb-12">
+      {FEED_KEYS.map(feed => (
+        <FeedReader key={feed} feed={feed} onPoints={onPoints} />
+      ))}
 
-      <section id="markets" className="scroll-mt-24">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-xl font-semibold m-0">Markets</h2>
-          <div role="tablist" className="flex flex-wrap gap-1 rounded-xl bg-base-content/5 p-1">
-            {FILTERS.map(entry => (
-              <button
-                key={entry.value}
-                role="tab"
-                aria-selected={filter === entry.value}
-                onClick={() => setFilter(entry.value)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  filter === entry.value
-                    ? "bg-base-100 text-base-content shadow-sm"
-                    : "text-base-content/60 hover:text-base-content"
-                }`}
-              >
-                {entry.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-5 pb-12">
-          {isLoading && count === undefined ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <MarketCardSkeleton />
-              <MarketCardSkeleton />
-              <MarketCardSkeleton />
-            </div>
-          ) : error ? (
-            <ErrorState
-              message="Markets could not be loaded. Check your connection and retry."
-              onRetry={() => window.location.reload()}
-            />
-          ) : count === 0 ? (
-            <EmptyState
-              title="No markets yet"
-              body="Be the first to open a market on HBAR, BTC or ETH."
-              actionHref="/markets/new"
-              actionLabel="Create a market"
-            />
-          ) : visible.length === 0 ? (
-            <EmptyState
-              title="Nothing in this filter"
-              body="Try another filter, or create a market."
-              actionHref="/markets/new"
-              actionLabel="Create a market"
-            />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {visible.map(entry =>
-                entry.market ? (
-                  <MarketCard
-                    key={entry.id}
-                    marketId={entry.id}
-                    market={entry.market}
-                    status={config ? deriveStatus(entry.market, nowSec, config) : "open"}
-                    chainId={targetNetwork.id}
-                  />
-                ) : null,
-              )}
-            </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <h1 className="text-2xl font-bold m-0">Markets</h1>
+          {count !== undefined && (
+            <span className="rounded-full border border-base-300 px-2 text-xs font-semibold text-base-content/60">
+              {count}
+            </span>
           )}
         </div>
-      </section>
+        <Link href="/markets/new" className="btn btn-primary btn-sm h-9 px-4">
+          Create market
+        </Link>
+      </div>
 
-      <section aria-labelledby="how-it-works" className="pb-8">
-        <h2 id="how-it-works" className="text-xl font-semibold m-0">
-          How it works
-        </h2>
-        <ol className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5 list-none p-0">
-          {HOW_IT_WORKS.map((step, index) => (
-            <li key={step.title} className="panel p-5">
-              <span className="grid place-items-center w-8 h-8 rounded-lg bg-primary/15 text-primary text-sm font-bold">
-                {index + 1}
-              </span>
-              <p className="font-semibold mt-4 mb-0">{step.title}</p>
-              <p className="text-sm leading-relaxed mt-2 mb-0 text-base-content/65">{step.body}</p>
-            </li>
+      <p className="mt-2 mb-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-base-content/60">
+        <span className="inline-flex items-center gap-1.5 font-semibold text-success">
+          <span className="w-1.5 h-1.5 rounded-full bg-current" aria-hidden />
+          Live
+        </span>
+        <span>Chainlink</span>
+        {FEED_KEYS.map(feed => {
+          const latest = history[feed]?.at(-1);
+          return (
+            <span key={feed}>
+              {feed}{" "}
+              <span className="font-mono text-base-content">{latest ? formatPrice(latest.normalized) : "..."}</span>
+            </span>
+          );
+        })}
+      </p>
+
+      <div className="mt-6 flex flex-wrap items-center gap-2">
+        <div role="tablist" aria-label="Status" className="flex rounded-[10px] border border-base-300 p-0.5">
+          {FILTERS.map(entry => (
+            <button
+              key={entry.value}
+              role="tab"
+              aria-selected={filter === entry.value}
+              onClick={() => setFilter(entry.value)}
+              className={chip(filter === entry.value)}
+            >
+              {entry.label}
+            </button>
           ))}
-        </ol>
-      </section>
+        </div>
+        <div role="tablist" aria-label="Asset" className="flex gap-1">
+          {["all", ...FEED_KEYS].map(feed => (
+            <button
+              key={feed}
+              role="tab"
+              aria-selected={asset === feed}
+              onClick={() => setAsset(feed)}
+              className={`rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
+                asset === feed
+                  ? "border-base-content bg-base-content text-base-200"
+                  : "border-base-300 text-base-content/60 hover:text-base-content"
+              }`}
+            >
+              {feed === "all" ? "All" : feed.split("/")[0]}
+            </button>
+          ))}
+        </div>
+        <label className="ml-auto flex w-full sm:w-64 items-center gap-2 rounded-[10px] border border-base-300 px-3 h-9 focus-within:border-primary">
+          <MagnifyingGlassIcon className="w-4 h-4 text-base-content/50" aria-hidden />
+          <input
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            placeholder="Search markets"
+            aria-label="Search markets"
+            className="w-full bg-transparent text-sm outline-none placeholder:text-base-content/40"
+          />
+        </label>
+      </div>
+
+      <div className="mt-5">
+        {isLoading && count === undefined ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <MarketCardSkeleton />
+            <MarketCardSkeleton />
+            <MarketCardSkeleton />
+          </div>
+        ) : error ? (
+          <ErrorState
+            message="Markets could not be loaded. Check your connection and retry."
+            onRetry={() => window.location.reload()}
+          />
+        ) : count === 0 ? (
+          <EmptyState
+            title="No markets yet"
+            body="Open the first one on HBAR, BTC or ETH."
+            actionHref="/markets/new"
+            actionLabel="Create market"
+          />
+        ) : visible.length === 0 ? (
+          <EmptyState title="No matching markets" body="Change the filters or the search." />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {visible.map(entry => (
+              <MarketCard
+                key={entry.id}
+                marketId={entry.id}
+                market={entry.market}
+                status={entry.status}
+                points={history[entry.feed]}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
-
-const HOW_IT_WORKS = [
-  {
-    title: "Stake on a side",
-    body: "Every stake mints YES or NO position tokens on the Hedera Token Service, one token per HBAR, held in your own account.",
-  },
-  {
-    title: "Hedera settles it",
-    body: "Creating a market books a scheduled call (HIP-1215). After expiry the network runs it and reads the first Chainlink price at or after expiry. No keeper, no admin.",
-  },
-  {
-    title: "Winners redeem",
-    body: "Winning tokens redeem for a share of the whole pool. If no price arrives within the grace period, the market voids and every stake refunds 1:1.",
-  },
-];
 
 export default Home;

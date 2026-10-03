@@ -11,9 +11,16 @@ export const BRAND = {
   description:
     "Binary price prediction markets on Hedera. Stake HBAR on YES or NO, settled by Chainlink with a Pyth fallback.",
   /** Theme primary, used by the wallet modal accent and the route progress bar. */
-  primaryColor: "#8259ef",
+  primaryColor: "#6b8afd",
   /** Primary of the "hedera-light" theme, used by the wallet modal in light mode. */
-  primaryColorLight: "#7044e6",
+  primaryColorLight: "#4f6ef7",
   /** Theme page background, used by the manifest splash screen and browser chrome. */
-  backgroundColor: "#0a0a12",
+  backgroundColor: "#0f1729",
 } as const;
+
+/** Coin tile colors per asset symbol; unknown symbols fall back to the theme's neutral surface. */
+export const ASSET_COLORS: Record<string, { background: string; color: string }> = {
+  HBAR: { background: "#000000", color: "#ffffff" },
+  BTC: { background: "#f7931a", color: "#ffffff" },
+  ETH: { background: "#627eea", color: "#ffffff" },
+};

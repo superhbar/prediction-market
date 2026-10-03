@@ -1,7 +1,6 @@
 import React from "react";
 import { HederaPortalFaucet } from "@scaffold-hbar-ui/components";
 import { hedera } from "viem/chains";
-import { SwitchTheme } from "~~/components/SwitchTheme";
 import { useFetchHbarPrice } from "~~/hooks/scaffold-hbar";
 import { useTargetNetwork } from "~~/hooks/scaffold-hbar/useTargetNetwork";
 
@@ -33,7 +32,6 @@ export const Footer = () => {
             </span>
           )}
           {isTestnet && <HederaPortalFaucet showIcon />}
-          <SwitchTheme />
         </div>
         <nav className="flex flex-wrap gap-x-5 gap-y-1 text-base-content/60">
           {LINKS.map(link => (

@@ -21,7 +21,7 @@ import { type Market, MarketOutcome, MarketState } from "~~/utils/markets/types"
 import { formatExactPrice } from "~~/utils/markets/units";
 
 /** Market detail: headline, odds, chart, stake, settlement timeline, activity and redeem. */
-export function MarketDetail({ id }: { id: string }) {
+export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialSide?: "YES" | "NO" }) {
   const { market, invalid, notFound, isLoading, error, refetch } = useMarket(id);
   const { config } = useMarketConfig();
   const feedLabel = market ? bytes32ToFeedKey(market.feedKey) : "HBAR/USD";
@@ -50,7 +50,7 @@ export function MarketDetail({ id }: { id: string }) {
   if (invalid || notFound || !market) {
     return (
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-16">
-        <p className="label-caps mt-10 m-0">Market #{id}</p>
+        <p className="text-sm text-base-content/60 mt-8 m-0">Market #{id}</p>
         <h1 className="mt-3 text-3xl md:text-4xl font-bold tracking-tight">Market not found</h1>
         <p className="mt-4 text-[15px] opacity-80">No market with this id exists on this network.</p>
         <Link href="/" className="btn btn-primary btn-sm mt-6">
@@ -69,8 +69,11 @@ export function MarketDetail({ id }: { id: string }) {
   );
 
   return (
-    <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-8">
-      <div className="mt-8 flex items-start gap-4">
+    <div className="max-w-[1240px] mx-auto px-4 sm:px-6 w-full pb-8">
+      <Link href="/" className="inline-block mt-6 text-sm text-base-content/60 hover:text-base-content">
+        &larr; Markets
+      </Link>
+      <div className="mt-4 flex items-start gap-4">
         <AssetBadge feedLabel={feedLabel} size="lg" />
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 text-sm text-base-content/60">
@@ -78,7 +81,7 @@ export function MarketDetail({ id }: { id: string }) {
             <span>&middot; Market #{id}</span>
             <StatusPill status={status} label={status === "settled" ? resolutionLabel(market) : statusLabel(status)} />
           </div>
-          <h1 className="mt-2 text-2xl md:text-4xl font-bold tracking-tight leading-tight max-w-3xl">
+          <h1 className="mt-1.5 text-2xl md:text-3xl font-bold leading-tight max-w-3xl">
             {marketQuestion(feedLabel, market.strike, market.expiry)}
           </h1>
         </div>
@@ -86,8 +89,8 @@ export function MarketDetail({ id }: { id: string }) {
 
       <Resolution market={market} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
-        <div className="lg:col-span-8 flex flex-col gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
+        <div className="lg:col-span-8 flex flex-col gap-4">
           <OddsBar
             yesPool={market.yesPool}
             noPool={market.noPool}
@@ -112,7 +115,7 @@ export function MarketDetail({ id }: { id: string }) {
         </div>
         <div className="lg:col-span-4 order-first lg:order-none">
           <div className="lg:sticky lg:top-24 flex flex-col gap-4">
-            <StakePanel marketId={Number(id)} market={market} />
+            <StakePanel marketId={Number(id)} market={market} initialSide={initialSide} />
             <RedeemPanel marketId={Number(id)} market={market} />
           </div>
         </div>

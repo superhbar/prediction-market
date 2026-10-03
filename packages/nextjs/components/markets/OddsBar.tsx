@@ -50,13 +50,12 @@ function Side({ label, percent, pool, won, faded, alignEnd }: SideProps) {
   const color = label === "Yes" ? "text-yes" : "text-no";
   return (
     <div className={`${alignEnd ? "text-right" : ""} ${faded ? "opacity-40" : ""}`}>
-      <p className={`m-0 flex items-center gap-2 text-sm font-semibold ${color} ${alignEnd ? "justify-end" : ""}`}>
+      <p className={`m-0 flex items-center gap-2 text-sm font-semibold ${alignEnd ? "justify-end" : ""}`}>
         {label}
         {won && <span className="rounded-full bg-primary/15 text-primary px-2 py-0.5 text-xs">Won</span>}
       </p>
-      <p className="m-0 mt-1 text-4xl md:text-5xl font-bold tabular-nums tracking-tight">
-        {percent}
-        <span className="text-xl text-base-content/50">%</span>
+      <p className={`m-0 mt-1 text-4xl font-bold tabular-nums ${color}`}>
+        {percent}%<span className="ml-1.5 text-sm font-medium text-base-content/50">chance</span>
       </p>
       <p className="m-0 mt-1 text-sm text-base-content/60 tabular-nums">{formatHbar(pool)}</p>
     </div>

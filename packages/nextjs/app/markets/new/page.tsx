@@ -124,7 +124,7 @@ const NewMarketPage = () => {
 
   return (
     <div className="max-w-[720px] mx-auto px-4 sm:px-6 w-full pb-8">
-      <p className="label-caps mt-10 m-0">New market</p>
+      <p className="text-sm text-base-content/60 mt-8 m-0">New market</p>
       <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Open a market</h1>
       <p className="mt-3 text-base-content/70">
         Pick a feed, set the strike and expiry. Creation books the settlement schedule and mints both position tokens.

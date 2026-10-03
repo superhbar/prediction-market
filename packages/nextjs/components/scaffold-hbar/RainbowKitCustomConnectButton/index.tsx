@@ -32,7 +32,7 @@ export const RainbowKitCustomConnectButton = () => {
             {(() => {
               if (!connected) {
                 return (
-                  <button className="btn btn-primary btn-sm" onClick={openConnectModal} type="button">
+                  <button className="btn btn-primary btn-sm h-9" onClick={openConnectModal} type="button">
                     Connect Wallet
                   </button>
                 );
@@ -43,13 +43,16 @@ export const RainbowKitCustomConnectButton = () => {
               }
 
               return (
-                <>
-                  <div className="hidden sm:flex flex-col items-center mr-2">
+                // One joined control: network | balance | account menu.
+                <div className="flex h-9 items-center whitespace-nowrap rounded-[10px] border border-base-300 bg-base-100 text-[13px]">
+                  <span className="hidden md:inline-flex items-center gap-2 px-3 font-semibold">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: networkColor }} aria-hidden />
+                    {chain.name}
+                  </span>
+                  <span className="hidden sm:inline-flex h-full items-center border-l border-base-300 px-3">
                     <HbarBalance address={account.address as Address} />
-                    <span className="text-xs" style={{ color: networkColor }}>
-                      {chain.name}
-                    </span>
-                  </div>
+                  </span>
+                  <span className="h-full border-l border-base-300" aria-hidden />
                   <AddressInfoDropdown
                     address={account.address as Address}
                     displayName={account.displayName}
@@ -58,7 +61,7 @@ export const RainbowKitCustomConnectButton = () => {
                   />
                   <RevealBurnerPKModal />
                   <SetBurnerPKModal />
-                </>
+                </div>
               );
             })()}
           </>

@@ -22,8 +22,9 @@ export const HbarBalance = ({ address }: { address: Address }) => {
 
   const hbar = Number(formatEther(data.value));
   return (
-    <span className="text-[0.8em] font-semibold" style={{ color: "var(--color-base-content)" }}>
-      {hbar.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 })} HBAR
+    <span className="font-semibold tabular-nums">
+      {hbar.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{" "}
+      <span className="font-normal text-base-content/50">HBAR</span>
     </span>
   );
 };

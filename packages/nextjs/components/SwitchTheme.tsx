@@ -31,7 +31,7 @@ export const SwitchTheme = ({ className }: { className?: string }) => {
       type="button"
       onClick={handleToggle}
       aria-label={isDarkMode ? "Switch to light theme" : "Switch to dark theme"}
-      className={`btn btn-circle btn-sm border border-base-300 bg-base-100 shadow-none ${className}`}
+      className={`grid h-9 w-9 place-items-center rounded-[10px] border border-base-300 bg-base-100 text-base-content/70 hover:text-base-content ${className ?? ""}`}
     >
       {isDarkMode ? <SunIcon className="h-4 w-4" /> : <MoonIcon className="h-4 w-4" />}
     </button>

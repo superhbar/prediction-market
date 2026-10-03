@@ -80,7 +80,7 @@ export function RedeemPanel({ marketId, market }: RedeemPanelProps) {
 
   return (
     <div className="panel p-5">
-      <p className="label-caps m-0">Redeem</p>
+      <p className="text-sm font-semibold text-base-content/70 m-0">Redeem</p>
       {!account && <p className="text-sm mt-2 text-base-content/60">Connect a wallet to see your balances.</p>}
       {account && yesBalance === 0n && noBalance === 0n && (
         <p className="text-sm mt-2 text-base-content/60">No position tokens in this account.</p>

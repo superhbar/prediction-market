@@ -50,7 +50,7 @@ const PortfolioView = () => {
   if (!account) {
     return (
       <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-8">
-        <p className="label-caps mt-10 m-0">Portfolio</p>
+        <p className="text-sm text-base-content/60 mt-8 m-0">Portfolio</p>
         <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Your positions</h1>
         <div className="mt-8">
           <EmptyState title="No wallet connected" body="Connect a wallet to see positions across markets." />
@@ -63,7 +63,7 @@ const PortfolioView = () => {
 
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 w-full pb-8">
-      <p className="label-caps mt-10 m-0">Portfolio</p>
+      <p className="text-sm text-base-content/60 mt-8 m-0">Portfolio</p>
       <h1 className="mt-2 text-3xl md:text-4xl font-bold tracking-tight">Your positions</h1>
       <div className="mt-8">
         {loading ? (

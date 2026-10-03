@@ -4,6 +4,7 @@ import React, { useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bars3Icon } from "@heroicons/react/24/outline";
+import { SwitchTheme } from "~~/components/SwitchTheme";
 import { RainbowKitCustomConnectButton } from "~~/components/scaffold-hbar";
 import { useOutsideClick } from "~~/hooks/scaffold-hbar";
 import { BRAND } from "~~/utils/brand";
@@ -38,15 +39,18 @@ export const HeaderMenuLinks = () => {
   return (
     <>
       {menuLinks.map(({ label, href }) => {
-        const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
+        const isActive =
+          href === "/"
+            ? pathname === "/" || (pathname.startsWith("/markets/") && !pathname.startsWith("/markets/new"))
+            : pathname.startsWith(href);
         return (
           <li key={href}>
             <Link
               href={href}
-              passHref
+              aria-current={isActive ? "page" : undefined}
               className={`${
-                isActive ? "bg-base-content/10 text-base-content" : "text-base-content/60 hover:text-base-content"
-              } rounded-lg py-1.5 px-3 text-sm font-medium transition-colors`}
+                isActive ? "bg-base-100 text-base-content" : "text-base-content/60 hover:text-base-content"
+              } block rounded-lg px-4 py-1.5 text-[13.5px] font-semibold transition-colors`}
             >
               {label}
             </Link>
@@ -57,18 +61,18 @@ export const HeaderMenuLinks = () => {
   );
 };
 
-/** Brand mark: a Hedera-purple gradient tile. Swap it for your own logo. */
+/** Logo tile. Replace it with your own mark; the letter comes from BRAND. */
 const LogoMark = () => (
   <span
     aria-hidden
-    className="grid place-items-center w-8 h-8 rounded-lg bg-gradient-to-br from-hedera-purple to-hedera-cobalt text-white text-sm font-bold"
+    className="grid place-items-center w-7 h-7 rounded-lg bg-primary text-primary-content text-sm font-extrabold"
   >
     {BRAND.logoLetter}
   </span>
 );
 
 /**
- * Site header
+ * Site header: logo left, navigation as one centered segmented control, wallet and theme right.
  */
 export const Header = () => {
   const burgerMenuRef = useRef<HTMLDetailsElement>(null);
@@ -77,15 +81,15 @@ export const Header = () => {
   });
 
   return (
-    <div className="sticky top-0 z-20 border-b border-base-content/10 bg-base-200/70 backdrop-blur-xl">
-      <div className="navbar min-h-0 h-16 max-w-[1200px] mx-auto px-4 sm:px-6 justify-between">
-        <div className="navbar-start w-auto gap-2">
+    <header className="sticky top-0 z-20 border-b border-base-300 bg-base-200">
+      <div className="max-w-[1240px] mx-auto h-[60px] px-4 sm:px-6 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        <div className="flex items-center gap-2">
           <details className="dropdown lg:hidden" ref={burgerMenuRef}>
             <summary className="btn btn-ghost btn-sm px-2" aria-label="Menu">
               <Bars3Icon className="h-5 w-5" />
             </summary>
             <ul
-              className="menu dropdown-content mt-3 p-2 panel w-52 gap-1"
+              className="menu dropdown-content mt-3 p-1.5 panel w-48 gap-0.5"
               onClick={() => {
                 burgerMenuRef?.current?.removeAttribute("open");
               }}
@@ -93,21 +97,21 @@ export const Header = () => {
               <HeaderMenuLinks />
             </ul>
           </details>
-          <Link href="/" passHref className="flex items-center gap-2.5 shrink-0">
+          <Link href="/" className="flex items-center gap-2.5 shrink-0">
             <LogoMark />
-            <span className="font-semibold tracking-tight hidden sm:inline">{BRAND.name}</span>
-            <span className="hidden md:inline text-[11px] font-medium rounded-full px-2 py-0.5 bg-primary/15 text-primary">
-              Hedera
-            </span>
+            <span className="text-[17px] font-bold">{BRAND.name}</span>
           </Link>
-          <ul className="hidden lg:flex flex-nowrap menu menu-horizontal px-1 gap-1 ml-6">
+        </div>
+        <nav aria-label="Main">
+          <ul className="hidden lg:flex items-center gap-0.5 rounded-xl border border-base-300 p-1">
             <HeaderMenuLinks />
           </ul>
-        </div>
-        <div className="navbar-end grow">
+        </nav>
+        <div className="flex items-center justify-end gap-2">
           <RainbowKitCustomConnectButton />
+          <SwitchTheme />
         </div>
       </div>
-    </div>
+    </header>
   );
 };

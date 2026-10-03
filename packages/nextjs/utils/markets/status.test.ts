@@ -48,6 +48,12 @@ describe("deriveStatus", () => {
     expect(deriveStatus(market({ retriesLeft: 1 }), 1_000_061n, config)).toBe("retrying");
   });
 
+  it("stops reporting retrying once the last scheduled call has run", () => {
+    expect(deriveStatus(market({ retriesLeft: 0, schedulePending: false }), 1_000_061n, config)).toBe(
+      "settle-available",
+    );
+  });
+
   it("reports voidable after the grace period", () => {
     expect(deriveStatus(market({}), 1_086_401n, config)).toBe("voidable");
   });

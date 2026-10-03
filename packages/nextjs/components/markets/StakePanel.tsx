@@ -23,15 +23,17 @@ import { notification } from "~~/utils/scaffold-hbar";
 type StakePanelProps = {
   marketId: number;
   market: Market;
+  /** Side selected on first render, from the market card's Buy Yes or Buy No link. */
+  initialSide?: "YES" | "NO";
 };
 
 type Association = "checking" | "ok" | "needs-association" | "unknown";
 
 /** Stake YES/NO with a projected payout, association check and explicit gas. */
-export function StakePanel({ marketId, market }: StakePanelProps) {
+export function StakePanel({ marketId, market, initialSide = "YES" }: StakePanelProps) {
   const { address: account } = useAccount();
   const { targetNetwork } = useTargetNetwork();
-  const [side, setSide] = useState<"YES" | "NO">("YES");
+  const [side, setSide] = useState<"YES" | "NO">(initialSide);
   const [amount, setAmount] = useState("100");
 
   const yes = side === "YES";
@@ -121,7 +123,7 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
   if (!tradingOpen) {
     return (
       <div className="panel p-5">
-        <p className="label-caps m-0">Trading closed</p>
+        <p className="text-sm font-semibold text-base-content/70 m-0">Trading closed</p>
         <p className="text-base font-medium leading-snug mt-2 mb-0">
           {isRefund(market)
             ? "Every position in this market redeems 1:1 for the HBAR staked."
@@ -139,23 +141,23 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
 
   return (
     <div className="panel p-5">
-      <p className="label-caps m-0">Take a side</p>
+      <p className="text-sm font-semibold text-base-content/70 m-0">Take a side</p>
       <div className="grid grid-cols-2 gap-2 mt-3" role="radiogroup" aria-label="Outcome">
         <button
           role="radio"
           aria-checked={yes}
-          className={`py-3 rounded-xl font-semibold transition-colors ${yes ? "bg-yes text-white" : "bg-yes/10 text-yes hover:bg-yes/20"}`}
+          className={`py-3 rounded-xl font-semibold transition-colors ${yes ? "bg-yes text-base-200" : "bg-yes/10 text-yes hover:bg-yes/20"}`}
           onClick={() => setSide("YES")}
         >
-          Yes {yesPct}%
+          Yes {yesPct}¢
         </button>
         <button
           role="radio"
           aria-checked={!yes}
-          className={`py-3 rounded-xl font-semibold transition-colors ${!yes ? "bg-no text-white" : "bg-no/10 text-no hover:bg-no/20"}`}
+          className={`py-3 rounded-xl font-semibold transition-colors ${!yes ? "bg-no text-base-200" : "bg-no/10 text-no hover:bg-no/20"}`}
           onClick={() => setSide("NO")}
         >
-          No {100 - yesPct}%
+          No {100 - yesPct}¢
         </button>
       </div>
 
@@ -217,7 +219,7 @@ export function StakePanel({ marketId, market }: StakePanelProps) {
       )}
 
       <button
-        className={`btn w-full mt-4 border-0 text-white ${yes ? "bg-yes hover:bg-yes/90" : "bg-no hover:bg-no/90"}`}
+        className={`btn w-full mt-4 border-0 text-base-200 ${yes ? "bg-yes hover:bg-yes/90" : "bg-no hover:bg-no/90"}`}
         onClick={stake}
         disabled={!account || !amountValid || isStaking || association === "needs-association"}
       >
