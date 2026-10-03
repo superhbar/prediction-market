@@ -16,14 +16,13 @@ import {
   hbarToWeibar,
   isPositiveDecimal,
   projectedPayout,
-  yesPercent,
 } from "~~/utils/markets/units";
 import { notification } from "~~/utils/scaffold-hbar";
 
 type StakePanelProps = {
   marketId: number;
   market: Market;
-  /** Side selected on first render, from the market card's Buy Yes or Buy No link. */
+  /** Side selected on first render, from the market card's Stake Yes or Stake No link. */
   initialSide?: "YES" | "NO";
 };
 
@@ -118,8 +117,6 @@ export function StakePanel({ marketId, market, initialSide = "YES" }: StakePanel
     }
   };
 
-  const yesPct = Math.round(yesPercent(market.yesPool, market.noPool));
-
   if (!tradingOpen) {
     return (
       <div className="panel p-5">
@@ -149,7 +146,7 @@ export function StakePanel({ marketId, market, initialSide = "YES" }: StakePanel
           className={`py-3 rounded-xl font-semibold transition-colors ${yes ? "bg-yes text-base-200" : "bg-yes/10 text-yes hover:bg-yes/20"}`}
           onClick={() => setSide("YES")}
         >
-          Yes {yesPct}¢
+          Yes
         </button>
         <button
           role="radio"
@@ -157,7 +154,7 @@ export function StakePanel({ marketId, market, initialSide = "YES" }: StakePanel
           className={`py-3 rounded-xl font-semibold transition-colors ${!yes ? "bg-no text-base-200" : "bg-no/10 text-no hover:bg-no/20"}`}
           onClick={() => setSide("NO")}
         >
-          No {100 - yesPct}¢
+          No
         </button>
       </div>
 
@@ -193,7 +190,7 @@ export function StakePanel({ marketId, market, initialSide = "YES" }: StakePanel
           <dd className="font-semibold">{amountValid ? `${amount} ${side} tokens` : "-"}</dd>
         </div>
         <div className="flex justify-between">
-          <dt className="text-base-content/60">Pays if {side} wins</dt>
+          <dt className="text-base-content/60">Pays if {side} wins (estimate)</dt>
           <dd className="font-semibold tabular-nums">
             {amountTinybar !== undefined
               ? formatHbar(
@@ -223,11 +220,11 @@ export function StakePanel({ marketId, market, initialSide = "YES" }: StakePanel
         onClick={stake}
         disabled={!account || !amountValid || isStaking || association === "needs-association"}
       >
-        {isStaking ? "Staking…" : `Buy ${side} for ${amountValid ? amount : "-"} HBAR`}
+        {isStaking ? "Staking…" : `Stake ${side} for ${amountValid ? amount : "-"} HBAR`}
       </button>
       <p className="text-xs mt-3 mb-0 text-base-content/50">
-        The payout assumes no further stakes; later stakes move it. Your first stake on a token also pays a one-time
-        auto-association fee.
+        The payout preview is an estimate that assumes no further stakes; later stakes move it. Your first stake on a
+        token also pays a one-time auto-association fee.
       </p>
     </div>
   );

@@ -127,7 +127,8 @@ const NewMarketPage = () => {
       <div className="max-w-2xl">
         <h1 className="text-2xl font-bold m-0">Create market</h1>
         <p className="mt-2 mb-0 text-base-content/60">
-          Pick a feed, set the strike and expiry. Creation books the settlement schedule and mints both position tokens.
+          Pick a feed, set the strike and expiry. Creation books the settlement schedule and creates both position
+          tokens; staking mints them.
         </p>
 
         <div className="panel p-5 md:p-6 mt-6 space-y-5">

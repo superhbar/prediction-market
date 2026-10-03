@@ -11,7 +11,7 @@ type OddsBarProps = {
   footer?: ReactNode;
 };
 
-/** Pool split as implied odds: YES and NO shares, the two-tone bar and the total pooled. */
+/** Pool split: YES and NO shares of the pooled HBAR, the two-tone bar and the total pooled. */
 export function OddsBar({ yesPool, noPool, winner, footer }: OddsBarProps) {
   const yes = yesPercent(yesPool, noPool);
   // Round YES once and derive NO from it so the two sides always add up to 100.
@@ -55,7 +55,7 @@ function Side({ label, percent, pool, won, faded, alignEnd }: SideProps) {
         {won && <span className="rounded-full bg-primary/15 text-primary px-2 py-0.5 text-xs">Won</span>}
       </p>
       <p className={`m-0 mt-1 text-4xl font-bold tabular-nums ${color}`}>
-        {percent}%<span className="ml-1.5 text-sm font-medium text-base-content/50">chance</span>
+        {percent}%<span className="ml-1.5 text-sm font-medium text-base-content/50">of pool</span>
       </p>
       <p className="m-0 mt-1 text-sm text-base-content/60 tabular-nums">{formatHbar(pool)}</p>
     </div>

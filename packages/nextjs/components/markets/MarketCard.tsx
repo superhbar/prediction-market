@@ -37,7 +37,7 @@ function closedNote(market: Market, status: UiStatus): { tone: "warning" | "neut
   }
 }
 
-/** Market summary for the list grid: question, implied chance, buy buttons and timing. */
+/** Market summary for the list grid: question, pool share, stake buttons and timing. */
 export function MarketCard({ marketId, market, status, points = [] }: MarketCardProps) {
   const feedLabel = bytes32ToFeedKey(market.feedKey);
   const yes = yesPercent(market.yesPool, market.noPool);
@@ -66,7 +66,7 @@ export function MarketCard({ marketId, market, status, points = [] }: MarketCard
           <span className={`text-3xl font-bold tabular-nums ${yesRounded >= 50 ? "text-yes" : "text-no"}`}>
             {yesRounded}%
           </span>
-          <span className="text-sm text-base-content/60">chance</span>
+          <span className="text-sm text-base-content/60">of pool on Yes</span>
         </p>
         <Sparkline points={points} />
       </div>
@@ -91,13 +91,13 @@ export function MarketCard({ marketId, market, status, points = [] }: MarketCard
             href={`${href}?side=yes`}
             className="btn btn-sm h-10 text-sm font-semibold border-yes/30 bg-yes/10 text-yes hover:bg-yes/20 hover:border-yes/50"
           >
-            Buy Yes {yesRounded}¢
+            Stake Yes
           </Link>
           <Link
             href={`${href}?side=no`}
             className="btn btn-sm h-10 text-sm font-semibold border-no/30 bg-no/10 text-no hover:bg-no/20 hover:border-no/50"
           >
-            Buy No {100 - yesRounded}¢
+            Stake No
           </Link>
         </div>
       )}

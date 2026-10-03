@@ -20,9 +20,11 @@ This is an increment on an existing, working template. Do not rebuild or restyle
 - Routes `/`, `/markets/new`, `/markets/[id]`, `/portfolio`, `/debug` and `/api/pyth` keep working.
 - `packages/foundry` is out of scope. Do not change `PredictionMarkets.sol`, its tests, the deploy
   scripts or `packages/nextjs/contracts/deployedContracts.ts`.
-- The editorial design system: Fraunces headings (`font-editorial`), Inter body, cream and ink
-  theme tokens (`bg-base-100`, `border-base-300`, `text-base-content/60`), purple `primary`, small
-  uppercase tracked labels. Copy the look of `SettlementTimeline` and `RedeemPanel`.
+- The current look: Manrope body with IBM Plex Mono for numbers and addresses, dark navy
+  `hedera` theme by default with a light `hedera-light` variant, semantic classes from
+  `styles/globals.css` (`bg-base-100`, `border-base-300`, `text-base-content/60`, `primary`,
+  `bg-yes`/`text-yes`, `bg-no`/`text-no`, `.panel`), small uppercase tracked labels. Copy the look
+  of `SettlementTimeline` and `RedeemPanel`.
 - Yarn 3 workspaces; no new dependencies are needed (`viem` already decodes logs).
 
 ## Feature

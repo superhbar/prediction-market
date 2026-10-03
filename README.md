@@ -14,9 +14,9 @@ More screenshots: [an open market with the payout preview](docs/screenshots/mark
 
 One contract, `PredictionMarkets.sol`, holds every market. It creates two HTS tokens per market (YES and NO) and keeps the treasury, supply and wipe keys for them, so staking mints tokens and redeeming wipes them without an approve step. It books settlement through the Schedule Service at `0x16b` (HIP-1215) and settles on the first oracle price published at or after expiry, so nobody can bet on a price that is already known.
 
-The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (odds, price chart, buy panel, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
+The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (pool split, price chart, stake panel, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
 
-Around it: 89 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage), 45 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
+Around it: 89 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 218/218 lines, 88% branches), 45 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
 
 ## Quick start
 
@@ -121,7 +121,7 @@ States are `Open`, `Settled`, and `Voided` (see `State` in `PredictionMarkets.so
 
 ### Why the first round at or after expiry
 
-Testnet Chainlink feeds update every 3 to 46 minutes (measured). The latest price at expiry can therefore be published before trading closes, which would let traders bet on a known outcome. Both oracle paths settle on the first price published at or after expiry, so the settlement price is always unknowable while trading is open.
+Testnet Chainlink feeds update every 3 to 46 minutes (measured). The latest price at expiry can therefore be published before trading closes, which would let traders bet on a known outcome. Both oracle paths settle on the first price published at or after expiry: the contract excludes pre-expiry publications, so a price that was already known before expiry cannot settle the market.
 
 The contract only settles on a Chainlink round it can prove is first: walking back from the latest round, it must reach an earlier round of the same phase published before expiry. If the walk stops first (its 48-step bound, a phase boundary, a missing round), it reports no eligible round instead of guessing, and the market moves on to a retry, the Pyth fallback, or voiding.
 
@@ -141,6 +141,10 @@ Each market has a YES token and a NO token: HTS fungible tokens with 8 decimals,
 
 Payout equals `amount * totalPool / winningPool` and is read from the contract's `quotePayout`: the redeem amount the frontend shows is the number the contract pays. Before you stake, the form previews what the stake would pay if its side won at current pool sizes (`projectedPayout` in `utils/markets/units.ts`, the same formula); later stakes move that number. One-sided markets (only YES or only NO staked) and voided markets refund 1:1. Rounding dust from integer division stays in the contract.
 
+### How payouts work
+
+Staking is parimutuel, not an order book: one position token is minted per HBAR staked, whatever the pool split, and winners share the whole pool. Payout equals `amount * totalPool / winningPool`, quoted on chain by `quotePayout`. Worked example from market 0 on testnet (5 HBAR staked on YES, 3 HBAR on NO, settled YES): the YES staker redeemed 5 * 8 / 5 = 8 HBAR and the NO stake paid 0. If only one side has stakes, or the market is voided, every position redeems 1:1 for the HBAR staked.
+
 ### Units (tinybar vs weibar)
 
 Wallets and JSON-RPC send weibar (18 decimals). Inside the EVM, `msg.value` and balances are tinybar (8 decimals); the relay converts. The contract never rescales. The frontend converts at one boundary in `packages/nextjs/utils/markets/units.ts`: it sends value with `parseEther(hbar)` and formats contract amounts with 8 decimals.
@@ -149,7 +153,7 @@ Wallets and JSON-RPC send weibar (18 decimals). Inside the EVM, `msg.value` and 
 
 The network bills the contract for scheduled executions (a settle measured 127k gas, 0.104 HBAR at 82 tinybar per gas) and retry bookings (about 1.17 HBAR). Each market keeps its own reserve: 0.5 HBAR is charged per scheduled execution and 1.5 HBAR per retry. Creation requires at least 7 HBAR of reserve after the two HTS creation fees (about 23 HBAR total at the measured rate of $1 = 9.61 HBAR).
 
-`totalPoolLiability` tracks HBAR owed to traders and `totalReserves` tracks the sum of market reserves, so `withdrawReserve` never pays out of trader pools. A fee underestimate is absorbed by that market's creator, never by traders.
+`totalPoolLiability` tracks HBAR owed to traders and `totalReserves` tracks the sum of market reserves, so `withdrawReserve` pays only the surplus beyond trader pools and other markets' reserves. If fees were underestimated, the shortfall reduces what that market's creator can withdraw.
 
 If someone settles a market by hand before its booked schedule fires, the schedule still runs later and is still billed. So while a schedule is pending (`schedulePending`), `withdrawReserve` keeps one execution's cost (0.5 HBAR) in the reserve; the scheduled call returns quietly on a closed market, pays for itself from that holdback, and the creator can withdraw anything left afterwards.
 
@@ -199,7 +203,7 @@ yarn foundry:test
 yarn next:test
 ```
 
-`yarn foundry:test` runs 89 unit tests. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent. `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
+`yarn foundry:test` runs 89 unit tests. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent for the production contracts (PredictionMarkets 218/218 lines, 88% branches). `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
 
 `yarn next:test` runs vitest for units (including the pre-stake payout preview), feeds, status, Hashscan helpers and the HBAR price conversion. Redeem amounts come from the contract's own `quotePayout`.
 
@@ -315,11 +319,7 @@ hedera-harness run
 
 ### How the activity panel was built
 
-- Run branch: [`harness/run-market-activity-674bcd`](https://github.com/superhbar/prediction-market/tree/harness/run-market-activity-674bcd), one commit per attempt.
-- The nested `claude` CLI was not logged in on the build machine, so the run used the recipe's `generator:` override: OpenCode wrote the first pass, then agy (Claude Sonnet 4.6) took over when OpenCode's free model hit its rate limit. Tier 3 grading needs the same agent CLI, so it was done by hand; the results are below.
-- Tier 3.5 provisioned a funded ephemeral account on every attempt and swept it back (for example `0.0.10831218`, `0.0.10831341`).
-- The run ended with type-check, build, lint, tests and the static checks green, and one Tier 2 failure that was not the agent's code: the header balance and the HBAR price fetched CoinGecko and a second mirror host, which failed to resolve on the build machine. Both were fixed on `main` (the app now reads only the testnet mirror and the relay), and `yarn harness:validate` passes there with Tier 2 green on every gated route (all except `/debug`, see above).
-- The generated decoder, hook, panel and 9 unit tests landed unchanged apart from one comment.
+The Harness spec and validators for that feature are in `.harness/`.
 
 Tier 3 acceptance contract, graded by hand. C1, C2 and C4 were re-graded on 2026-10-03 against market 0 of the current deployment; C3 and C5 were graded on the deployment the run used (`0x5863781b...105b`) and do not depend on which market is checked.
 

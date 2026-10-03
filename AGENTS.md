@@ -22,7 +22,7 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 ## Architecture and key paths
 
 - `packages/foundry/contracts/PredictionMarkets.sol`: the whole protocol. One contract, all markets, no owner.
-- `packages/foundry/contracts/libraries/PriceMath.sol`: Chainlink/Pyth normalization to 1e18. Only payout math helper.
+- `packages/foundry/contracts/libraries/PriceMath.sol`: Chainlink/Pyth price normalization to 1e18 (oracle units only, not payout math; payouts are defined by `quotePayout`).
 - `packages/foundry/contracts/interfaces/`: `IAggregatorV3`, `IPyth`, `IHederaScheduleService`, `IHtsWipe`.
 - `packages/foundry/script/HelperConfig.s.sol`: feeds (HBAR/BTC/ETH, testnet + mainnet) and timing config. Single source of truth.
 - `packages/foundry/script/Deploy.s.sol`: localhost deploy. Hedera deploys go through `scripts-js/deployHedera.js`.
@@ -77,7 +77,7 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 
 ## How to verify a change
 
-1. `yarn foundry:test` (expect 89 passing, 100 percent line coverage).
+1. `yarn foundry:test` (expect 89 passing, 100 percent line coverage of the production contracts).
 2. `yarn next:lint`, `yarn next:check-types`, `yarn next:test`, `yarn next:build`.
 3. Touching settlement, scheduling, units, or reserve accounting: run `DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet` on testnet.
 4. Touching `.harness/` behavior: `yarn harness:validate` (Tiers 0 to 2).
