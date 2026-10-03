@@ -30,10 +30,10 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 - `packages/foundry/scripts-js/e2eTestnet.js`: create, stake both sides, wait for scheduled settle, redeem, withdraw reserve.
 - `packages/foundry/test/`: `PredictionMarkets.t.sol`, `PriceMath.t.sol`, `HelperConfig.t.sol`, `mocks/` (etched at `0x167`/`0x16b`).
 - `packages/nextjs/app/`: `page.tsx` (list), `markets/new`, `markets/[id]`, `portfolio`, `api/pyth/route.ts` (server-only Hermes proxy).
-- `packages/nextjs/components/markets/`: MarketCard, StakePanel, RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, `ui.tsx` (AssetBadge, StatusPill, OutcomeBar).
+- `packages/nextjs/components/markets/`: MarketCard, StakePanel, TradePanel (SaucerSwap), RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, `ui.tsx` (AssetBadge, StatusPill, OutcomeBar).
 - `packages/nextjs/styles/globals.css`: both daisyUI themes (`hedera` dark default, `hedera-light`) and `--color-yes`/`--color-no`. `utils/brand.ts`: app name and the hex colors CSS cannot reach.
-- `packages/nextjs/hooks/markets/`: useMarket(s), usePositions, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate, useMarketActivity.
-- `packages/nextjs/utils/markets/`: `units.ts` (unit boundary + gas limits), `feeds.ts`, `status.ts`, `mirror.ts`, `activity.ts` (event log decoder), `hashscan.ts`, `types.ts`.
+- `packages/nextjs/hooks/markets/`: useMarket(s), usePositions, useSaucerPool, useAccountExists, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate, useMarketActivity.
+- `packages/nextjs/utils/markets/`: `units.ts` (unit boundary + gas limits), `saucerswap.ts` (SaucerSwap V1 addresses, ABIs, price and slippage helpers), `feeds.ts`, `status.ts`, `mirror.ts`, `activity.ts` (event log decoder), `hashscan.ts`, `types.ts`.
 - `packages/nextjs/contracts/deployedContracts.ts`: generated. Never edit by hand.
 
 ## Invariants that must hold
@@ -63,6 +63,7 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 - Scheduled `settle` runs with 2.5M gas (constant `SETTLE_GAS`); 1.2M cannot book a nested retry. Each retry costs the reserve ~1.17 HBAR (charged 1.5 HBAR); each execution ~0.104 HBAR (charged 0.5 HBAR).
 - `hedera-forking` does not emulate HSS: keep the `vm.etch` mocks for unit tests and prove scheduling on real testnet via e2e.
 - HTS `burnToken` only burns from treasury, so redeem uses `wipeTokenAccount` (wipe key). No approve step exists by design.
+- SaucerSwap V1 pools for position tokens are opened and traded by users, never by the contract. Pair paths use the WHBAR token `0.0.15058`, not the router's `WHBAR()` wrapper contract. Opening a pool needs about 6.8M gas (`GAS.openPool` is 8M); SaucerSwap's documented 3.2M runs out.
 - Never cross a Chainlink phase boundary when walking rounds (top 16 bits of round id); walk is bounded to 48 steps.
 - Mirror node contract logs: never use the `topic1` query filter (needs a timestamp range of at most 7 days, and the zero word for market 0 matches nothing). Read logs unfiltered and match `topics[1]` on the client, as `useMarketActivity` does.
 - Read prices and balances from the target network's mirror node and relay only. No third-party price APIs: they fail in sandboxes and log console errors that break the Harness Tier 2 gate.

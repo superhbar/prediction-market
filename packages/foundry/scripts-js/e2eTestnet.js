@@ -1,6 +1,7 @@
 /**
  * End-to-end run of the full market lifecycle on Hedera testnet:
- * create -> stake YES and NO -> HIP-1215 scheduled settlement -> redeem -> withdraw the reserve.
+ * create -> stake YES and NO -> open a SaucerSwap YES/HBAR pool, buy and sell YES on it ->
+ * HIP-1215 scheduled settlement -> redeem -> withdraw the reserve.
  *
  * Transactions are signed in-process with ethers, so the key never appears in a command line (see
  * deployHedera.js for why `forge script` is not used). The mirror node confirms that the settlement came
@@ -16,8 +17,9 @@
  * If none applies yet, it prints when the market can be voided. Rerun with `--market <id>` to resume.
  *
  * Usage:
- *   DEPLOYER_PRIVATE_KEY=0x... node scripts-js/e2eTestnet.js [--address 0x...] [--strike 0.10] [--market <id>]
- * The account needs about 45 testnet HBAR (two HTS token creations, a 7 HBAR reserve and two stakes).
+ *   DEPLOYER_PRIVATE_KEY=0x... node scripts-js/e2eTestnet.js [--address 0x...] [--strike 0.10] [--market <id>] [--skip-saucerswap]
+ * The account needs about 75 testnet HBAR: two HTS token creations, an 8.5 HBAR reserve, two stakes and the
+ * SaucerSwap step ($2 pool fee, 1 HBAR of liquidity, a 0.5 HBAR buy). `--skip-saucerswap` leaves that step out.
  */
 import { ethers } from "ethers";
 import { existsSync, readFileSync } from "fs";
@@ -83,13 +85,13 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const step = (label, detail) => console.log(`${label.padEnd(22)} ${detail}`);
 
 /** Sends a contract call as a legacy transaction with an explicit gas limit and waits for success. */
-async function send(contract, method, args, { value, gas }) {
+async function send(contract, method, args, { value, valueWei, gas }) {
   const gasPrice = await contract.provider.getGasPrice();
   const tx = await contract[method](...args, {
     type: 0,
     gasPrice,
     gasLimit: gas,
-    value: value ? ethers.utils.parseEther(value) : 0,
+    value: valueWei ?? (value ? ethers.utils.parseEther(value) : 0),
   });
   const receipt = await contract.provider.waitForTransaction(tx.hash);
   if (receipt.status !== 1)
@@ -308,6 +310,106 @@ async function redeemAll(pm, id, market) {
   return redeemed;
 }
 
+// SaucerSwap V1 on testnet: router 0.0.19264, factory 0.0.9959, WHBAR token 0.0.15058 (pair paths use the
+// token; the router's WHBAR() returns the wrapper contract). Gas limits are measured, see docs/hedera-notes.md.
+const SAUCER_ROUTER = "0x0000000000000000000000000000000000004b40";
+const SAUCER_FACTORY = "0x00000000000000000000000000000000000026e7";
+const WHBAR_TOKEN = "0x0000000000000000000000000000000000003ad2";
+const EXCHANGE_RATE = "0x0000000000000000000000000000000000000168";
+
+/** Opens a YES/HBAR pool with 2 YES and 1 HBAR, buys YES for 0.5 HBAR, then sells 0.5 YES back. */
+async function tradeOnSaucerSwap(pm, id) {
+  const signer = pm.signer;
+  const owner = await signer.getAddress();
+  const { yesToken } = await pm.getMarket(id);
+  const token = new ethers.Contract(
+    yesToken,
+    ["function approve(address,uint256) returns (bool)"],
+    signer,
+  );
+  const router = new ethers.Contract(
+    SAUCER_ROUTER,
+    [
+      "function getAmountsOut(uint256,address[]) view returns (uint256[])",
+      "function addLiquidityETHNewPool(address,uint256,uint256,uint256,address,uint256) payable returns (uint256,uint256,uint256)",
+      "function swapExactETHForTokens(uint256,address[],address,uint256) payable returns (uint256[])",
+      "function swapExactTokensForETH(uint256,uint256,address[],address,uint256) returns (uint256[])",
+    ],
+    signer,
+  );
+  const factory = new ethers.Contract(
+    SAUCER_FACTORY,
+    [
+      "function pairCreateFee() view returns (uint256)",
+      "function getPair(address,address) view returns (address)",
+    ],
+    pm.provider,
+  );
+  const rate = new ethers.Contract(
+    EXCHANGE_RATE,
+    ["function tinycentsToTinybars(uint256) view returns (uint256)"],
+    pm.provider,
+  );
+  const deadline = () => Math.floor(Date.now() / 1000) + 600;
+  const minOut = (quoted) => quoted.mul(99).div(100);
+  const tinybarValue = (tinybar) =>
+    ethers.utils.parseUnits(tinybar.toString(), 10);
+
+  // The pool fee is a fixed USD amount; 3% over the converted rate covers drift until execution.
+  const feeTinybar = await rate.tinycentsToTinybars(
+    await factory.pairCreateFee(),
+  );
+  const deposit = ethers.BigNumber.from(200_000_000); // 2 YES (8 decimals)
+  await send(token, "approve", [SAUCER_ROUTER, deposit], { gas: 1_000_000 });
+  const pool = await send(
+    router,
+    "addLiquidityETHNewPool",
+    [yesToken, deposit, 0, 0, owner, deadline()],
+    {
+      valueWei: tinybarValue(feeTinybar.mul(103).div(100).add(100_000_000)),
+      gas: 8_000_000,
+    },
+  );
+  const pair = await factory.getPair(yesToken, WHBAR_TOKEN);
+  step(
+    "SaucerSwap pool",
+    `2 YES + 1 HBAR, fee ${ethers.utils.formatUnits(feeTinybar, 8)} HBAR ${HASHSCAN}/transaction/${pool.transactionHash} pair ${HASHSCAN}/contract/${pair}`,
+  );
+
+  const buyIn = ethers.BigNumber.from(50_000_000); // 0.5 HBAR in tinybar
+  const [, boughtQuote] = await router.getAmountsOut(buyIn, [
+    WHBAR_TOKEN,
+    yesToken,
+  ]);
+  const buy = await send(
+    router,
+    "swapExactETHForTokens",
+    [minOut(boughtQuote), [WHBAR_TOKEN, yesToken], owner, deadline()],
+    { valueWei: tinybarValue(buyIn), gas: 500_000 },
+  );
+  step(
+    "SaucerSwap buy",
+    `0.5 HBAR -> ${ethers.utils.formatUnits(boughtQuote, 8)} YES ${HASHSCAN}/transaction/${buy.transactionHash}`,
+  );
+
+  const sellIn = ethers.BigNumber.from(50_000_000); // 0.5 YES
+  const [, soldQuote] = await router.getAmountsOut(sellIn, [
+    yesToken,
+    WHBAR_TOKEN,
+  ]);
+  await send(token, "approve", [SAUCER_ROUTER, sellIn], { gas: 1_000_000 });
+  const sell = await send(
+    router,
+    "swapExactTokensForETH",
+    [sellIn, minOut(soldQuote), [yesToken, WHBAR_TOKEN], owner, deadline()],
+    { gas: 1_200_000 },
+  );
+  step(
+    "SaucerSwap sell",
+    `0.5 YES -> ${ethers.utils.formatUnits(soldQuote, 8)} HBAR ${HASHSCAN}/transaction/${sell.transactionHash}`,
+  );
+}
+
 async function main() {
   const key = process.env.DEPLOYER_PRIVATE_KEY;
   if (!key)
@@ -326,6 +428,8 @@ async function main() {
       ? await createAndStake(pm)
       : ethers.BigNumber.from(resume);
   if (resume !== undefined) step("resume market", `#${id}`);
+  if (resume === undefined && !process.argv.includes("--skip-saucerswap"))
+    await tradeOnSaucerSwap(pm, id);
 
   const market = await settleMarket(pm, id);
   if (!market) process.exit(2);

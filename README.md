@@ -18,7 +18,7 @@ One contract, `PredictionMarkets.sol`, holds every market. It creates two HTS to
 
 The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (pool split, price chart, stake panel, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
 
-Around it: 104 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 238/238 lines, 89% branches), 61 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
+Around it: 104 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 238/238 lines, 89% branches), 67 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
 
 ## What you get that is hard to build alone
 
@@ -26,8 +26,9 @@ Around it: 104 Foundry tests (HTS and the Schedule Service mocked, 100% line cov
 - **A settlement price nobody can pick.** The contract settles on the first Chainlink round published at or after expiry, and only once it has proven that round is the first: it walks back within the feed phase until it finds a round from before expiry. Pyth is a fallback with the same rule, and only opens when Chainlink provably has no round. `chainlinkSettlementRound` exposes the same check to the UI, so the Settle button appears exactly when the contract would accept it.
 - **Native Hedera services doing real work.** Each market creates its own YES and NO HTS tokens, staking mints them and redeeming wipes them with the contract's wipe key, so there is no approve step. Activity, schedules and balances come from the mirror node with Hashscan links on every row.
 - **Accounting you can audit.** Payouts come only from recorded pools, a fuzz test proves winners never receive more than the pool, and `withdrawReserve` can only pay out surplus beyond what traders and other markets are owed. A scheduled call never reverts on a handled path, because Hedera bills a reverted scheduled execution anyway.
+- **Positions you can trade before settlement.** YES and NO are ordinary HTS tokens, so the market page opens a SaucerSwap V1 pool for either side and buys or sells against it, with quotes from the router and a 1% slippage floor. The pool fee is priced in dollars through Hedera's exchange-rate system contract, and the e2e script opens a pool, buys and sells on testnet. See [Trading before settlement](#trading-before-settlement-saucerswap).
 - **Hedera details already measured.** [docs/hedera-notes.md](docs/hedera-notes.md) records what was measured on testnet: tinybar inside the EVM vs weibar in wallets, the 0.65 HBAR first-stake association cost, scheduled-call gas and billing, why `forge script --broadcast` cannot reach Hashio, and the mirror node log filter that silently matches nothing.
-- **Proof at every level.** 104 Foundry tests with 100% line coverage of the production contracts, 61 vitest tests, an end-to-end script that runs create, stake, scheduled settlement, redeem and reserve withdrawal on real testnet, source verified on Sourcify, CI that scaffolds the template fresh with both npm and yarn, and a [live demo](https://predera.vercel.app).
+- **Proof at every level.** 104 Foundry tests with 100% line coverage of the production contracts, 67 vitest tests, an end-to-end script that runs create, stake, a SaucerSwap pool and trade, scheduled settlement, redeem and reserve withdrawal on real testnet, source verified on Sourcify, CI that scaffolds the template fresh with both npm and yarn, and a [live demo](https://predera.vercel.app).
 - **Ready for coding agents.** `AGENTS.md` lists the invariants an agent must not break, and `.harness/` ships a Hedera Harness recipe whose validators pass in freshly scaffolded npm and yarn projects. The market activity panel was built through that recipe.
 
 ## Quick start
@@ -102,6 +103,7 @@ sequenceDiagram
     participant HSS as Schedule Service (0x16b)
     participant Trader
     participant CL as Chainlink feed
+    participant SS as SaucerSwap V1
     participant Pyth
 
     Creator->>PM: createMarket(feedKey, strike, expiry) + payment
@@ -110,6 +112,10 @@ sequenceDiagram
     PM->>HSS: scheduleCall(settle(marketId), expiry + 10 min)
     Trader->>PM: stake(marketId, YES/NO) + HBAR
     PM->>HTS: mint position tokens, transfer to trader
+    opt Trade before settlement
+        Trader->>SS: addLiquidityETHNewPool(YES, HBAR) + $2 pool fee
+        Trader->>SS: swap HBAR for YES, or YES for HBAR
+    end
     HSS->>PM: settle(marketId) at expiry + 10 min
     PM->>CL: walk back to first round at or after expiry
     alt round exists
@@ -152,6 +158,24 @@ Rounds more than 2 hours after expiry are rejected (`maxRoundLag`), so a market 
 Each market has a YES token and a NO token: HTS fungible tokens with 8 decimals, created by the contract, which holds treasury, supply key, and wipe key. Staking mints tokens equal to `msg.value` and transfers them to the staker. Redeem wipes the caller's tokens with the wipe key (HTS `burnToken` only burns from the treasury, so wiping is the correct primitive) and pays HBAR in the same transaction, with no approve step.
 
 Payout equals `amount * totalPool / winningPool` and is read from the contract's `quotePayout`: the redeem amount the frontend shows is the number the contract pays. Before you stake, the form previews what the stake would pay if its side won at current pool sizes (`projectedPayout` in `utils/markets/units.ts`, the same formula); later stakes move that number. One-sided markets (only YES or only NO staked) and voided markets refund 1:1. Rounding dust from integer division stays in the contract.
+
+### Trading before settlement (SaucerSwap)
+
+Staking is parimutuel: your HBAR joins the market's YES or NO pool and stays there until settlement. Because the position tokens are plain HTS tokens, anyone can also trade them on SaucerSwap V1, Hedera's main DEX, at any time before settlement. The contract is not involved: whoever holds a token when the market settles redeems it.
+
+- **Open a pool.** A holder of YES (or NO) tokens deposits tokens and HBAR with the router's `addLiquidityETHNewPool`. The deposit ratio sets the starting price, and the depositor receives the pool's LP token. SaucerSwap charges a fixed $2 pool fee: the factory reports it in tinycents (`pairCreateFee`) and the Hedera exchange-rate system contract (`0x168`, `tinycentsToTinybars`) converts it to HBAR, 19.66 HBAR when measured.
+- **Buy or sell.** The trade panel on the market page finds the pool through `factory.getPair(token, WHBAR)`, shows its price and reserves, quotes with the router's `getAmountsOut` and swaps with `swapExactETHForTokens` or `swapExactTokensForETH` at a 1% slippage floor. Selling needs an `approve` on the token first (HTS tokens have an ERC-20 facade).
+- **Two prices that mean different things.** The pool share on the market page is how the staked HBAR is split. The SaucerSwap price is what traders pay for a token right now, after weighing the odds and the payout per token.
+
+Measured on testnet (`yarn foundry:e2e:testnet` runs all three steps):
+
+| Step | Gas used | Notes |
+|---|---|---|
+| Open a pool | 6.79M | SaucerSwap's docs suggest 3.2M; that runs out inside the LP token association. The app sends 8M. |
+| Buy (HBAR to YES) | 0.18M | |
+| Sell (YES to HBAR) | 0.87M | Includes unwrapping WHBAR. |
+
+Pair paths use the WHBAR token `0.0.15058`; the router's `WHBAR()` returns the wrapper contract `0.0.15057`, which is not the token in the pair. Addresses live in `packages/nextjs/utils/markets/saucerswap.ts`.
 
 ### How payouts work
 
@@ -217,7 +241,7 @@ yarn next:test
 
 `yarn foundry:test` runs 104 unit tests. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent for the production contracts (PredictionMarkets 238/238 lines, 89% branches). `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
 
-`yarn next:test` runs vitest for units (including the pre-stake payout preview), feeds, status, Hashscan helpers and the HBAR price conversion. Redeem amounts come from the contract's own `quotePayout`.
+`yarn next:test` runs vitest for units (including the pre-stake payout preview), feeds, status, Hashscan helpers, the SaucerSwap price and slippage math, and the HBAR price conversion. Redeem amounts come from the contract's own `quotePayout`.
 
 Before pushing, also run the type and build gates:
 
