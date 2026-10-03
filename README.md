@@ -17,7 +17,7 @@ More screenshots: [an open market with the payout preview](docs/screenshots/mark
 - Chainlink push settlement plus Pyth pull fallback: settlement uses the first oracle price at or after expiry, never a cherry-picked price.
 - HTS position tokens: one fungible token per side per market (8 decimals), minted 1:1 per staked tinybar, redeemed by wipe (no approve step).
 - Frontend pages: market list with filters, create form with live Chainlink strike default, market detail (pools, odds, countdowns, stake, settle, void, redeem), portfolio, and the scaffold Debug Contracts page.
-- Tests: 78 Foundry unit tests with mocked HTS and Schedule Service, plus vitest coverage for units, feeds, status, and Hashscan helpers.
+- Tests: 88 Foundry unit tests with mocked HTS and Schedule Service (100% line coverage, mutation-checked), plus 41 vitest tests for units, feeds, status, activity decoding and Hashscan helpers.
 - E2E script: full lifecycle on real testnet (create, stake both sides, scheduled settle, redeem, reserve withdraw) that prints Hashscan links.
 - Harness recipe: `.harness/` holds a spec, PRDs, and validators so Hedera Harness can build features against the same gate.
 
@@ -111,7 +111,7 @@ sequenceDiagram
     Trader->>PM: redeem(marketId, side, amount)
     PM->>HTS: wipe caller's tokens
     PM->>Trader: pay HBAR (pro-rata winners, 1:1 if voided or one-sided)
-    opt Pyth fallback
+    opt Pyth fallback (expiry + 2h, only without an eligible Chainlink round)
         Trader->>PM: settleWithPyth(marketId, updateData)
         PM->>Pyth: parsePriceFeedUpdatesUnique, minPublishTime = expiry
         PM->>PM: finalize on first Pyth price at or after expiry
@@ -126,13 +126,15 @@ States are `Open`, `Settled`, and `Voided` (see `State` in `PredictionMarkets.so
 
 Testnet Chainlink feeds update every 3 to 46 minutes (measured). The latest price at expiry can therefore be published before trading closes, which would let traders bet on a known outcome. Both oracle paths settle on the first price published at or after expiry, so the settlement price is always unknowable while trading is open.
 
+The contract only settles on a Chainlink round it can prove is first: walking back from the latest round, it must reach an earlier round of the same phase published before expiry. If the walk stops first (its 48-step bound, a phase boundary, a missing round), it reports no eligible round instead of guessing, and the market moves on to a retry, the Pyth fallback, or voiding.
+
 ### Self-scheduling and retries (HIP-1215)
 
 At creation the contract books `settle(marketId)` as a scheduled call for expiry plus 10 minutes through the Schedule Service at `0x16b`. Inside a scheduled call, `msg.sender` equals the contract itself, which is how `settle` knows it was invoked by the network. If no Chainlink round exists at or after expiry yet, the scheduled call books its own retry (plus 15 minutes, up to 3 retries) from the market's reserve instead of reverting. Anyone can also call `settle` directly once a round exists.
 
 ### Pyth fallback and voiding
 
-`settleWithPyth` is callable by anyone after expiry while the market is neither settled nor voided. It uses `parsePriceFeedUpdatesUnique` with `minPublishTime` set to expiry, so only the first Pyth price at or after expiry is accepted and a late settler cannot pick a favorable price. The caller pays the Pyth update fee from `msg.value`; excess is refunded. After the 24 hour grace period, anyone can void an unsettled market and every position refunds 1:1.
+Chainlink always has precedence, so nobody can choose whichever oracle favours their side. `settleWithPyth` opens 2 hours after expiry (`maxRoundLag`, when no later Chainlink round can still qualify), and only if no provably first Chainlink round exists; otherwise it reverts with `ChainlinkRoundAvailable`. It uses `parsePriceFeedUpdatesUnique` with `minPublishTime` set to expiry, so only the first Pyth price at or after expiry is accepted. The caller pays the Pyth update fee from `msg.value`; excess is refunded. After the 24 hour grace period, anyone can void an unsettled market and every position refunds 1:1.
 
 Rounds more than 2 hours after expiry are rejected (`maxRoundLag`), so a market cannot settle on a price from hours later.
 
@@ -151,6 +153,8 @@ Wallets and JSON-RPC send weibar (18 decimals). Inside the EVM, `msg.value` and 
 The network bills the contract for scheduled executions (a settle measured 127k gas, 0.104 HBAR at 82 tinybar per gas) and retry bookings (about 1.17 HBAR). Each market keeps its own reserve: 0.5 HBAR is charged per scheduled execution and 1.5 HBAR per retry. Creation requires at least 7 HBAR of reserve after the two HTS creation fees (about 23 HBAR total at the measured rate of $1 = 9.61 HBAR).
 
 `totalPoolLiability` tracks HBAR owed to traders and `totalReserves` tracks the sum of market reserves, so `withdrawReserve` never pays out of trader pools. A fee underestimate is absorbed by that market's creator, never by traders.
+
+If someone settles a market by hand before its booked schedule fires, the schedule still runs later and is still billed. So while a schedule is pending (`schedulePending`), `withdrawReserve` keeps one execution's cost (0.5 HBAR) in the reserve; the scheduled call returns quietly on a closed market, pays for itself from that holdback, and the creator can withdraw anything left afterwards.
 
 ## Architecture
 
@@ -196,7 +200,7 @@ yarn foundry:test
 yarn next:test
 ```
 
-`yarn foundry:test` runs 78 unit tests. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent. `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
+`yarn foundry:test` runs 88 unit tests. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent. `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
 
 `yarn next:test` runs vitest for units (including the pre-stake payout preview), feeds, status, Hashscan helpers and the HBAR price conversion. Redeem amounts come from the contract's own `quotePayout`.
 
@@ -210,7 +214,7 @@ yarn next:build
 
 ## Verified on testnet
 
-Live deployment: `PredictionMarkets` at `0x5863781b36e7beee162152a7d8ab32fe471e105b` ([Hashscan](https://hashscan.io/testnet/contract/0x5863781b36e7beee162152a7d8ab32fe471e105b)).
+Live deployment: `PredictionMarkets` at `0x0cc41d2215C6e66caFF2C996b7FEEC162111B3d2` ([Hashscan](https://hashscan.io/testnet/contract/0x0cc41d2215C6e66caFF2C996b7FEEC162111B3d2)).
 
 Full lifecycle run with `yarn foundry:e2e:testnet` on 2026-10-02 against the deployment above (contract source verified on Sourcify, exact match). The first scheduled settlement found no Chainlink round after expiry yet, so the contract booked its own retry, which then settled the market. No bot or keeper was involved at any step.
 
