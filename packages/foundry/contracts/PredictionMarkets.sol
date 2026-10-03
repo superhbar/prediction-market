@@ -212,6 +212,10 @@ contract PredictionMarkets is ReentrancyGuard {
     /// @notice The last scheduled settlement found no eligible round and could not book another retry.
     ///         The market stays Open: anyone can settle once a round lands, use Pyth, or void after grace.
     event SettlementRetriesExhausted(uint256 indexed marketId);
+    /// @notice A scheduled settlement found no eligible round and the Schedule Service refused the retry.
+    ///         No retry fee is taken; the market stays Open like after SettlementRetriesExhausted.
+    /// @param responseCode The HSS response code, or 0 when the HSS call itself reverted.
+    event SettlementRetryFailed(uint256 indexed marketId, int64 responseCode);
     /// @notice Emitted when a market settles with its outcome, normalized price and source.
     event MarketSettled(uint256 indexed marketId, Outcome outcome, int256 price, uint256 priceTime, PriceSource source);
     /// @notice Emitted when a market is voided after the grace period.
@@ -323,8 +327,8 @@ contract PredictionMarkets is ReentrancyGuard {
 
     /// @notice Settles an expired market on the first Chainlink round at or after expiry.
     /// @dev Callable by the scheduled call or permissionlessly. A scheduled call with no round yet
-    ///      books a retry from the reserve, or emits SettlementRetriesExhausted when it cannot, and never
-    ///      reverts; anyone else reverts NoEligibleRound.
+    ///      books a retry from the reserve, or emits SettlementRetryFailed or SettlementRetriesExhausted
+    ///      when it cannot, and never reverts on those paths; anyone else reverts NoEligibleRound.
     /// @param marketId The market to settle.
     function settle(uint256 marketId) external {
         Market storage m = _getMarket(marketId);
@@ -346,13 +350,25 @@ contract PredictionMarkets is ReentrancyGuard {
             return;
         }
 
-        (bool found, int256 price, uint256 priceTime) = _firstRoundAtOrAfter(m.feedKey, m.expiry);
-        if (!found || priceTime > uint256(m.expiry) + maxRoundLag) {
+        (bool eligible, int256 price, uint256 priceTime) = _eligibleChainlinkRound(m.feedKey, m.expiry);
+        if (!eligible) {
             if (msg.sender == address(this) && m.retriesLeft > 0 && m.reserve >= retryCostEstimate) {
                 uint256 retryAt = block.timestamp + retryDelay;
-                (int64 rc, address schedule) =
-                    HSS.scheduleCall(address(this), retryAt, SETTLE_GAS, 0, abi.encodeCall(this.settle, (marketId)));
-                if (rc != SUCCESS) revert ScheduleFailed(rc);
+                // A failed booking must not revert either: the execution charge above has to stick.
+                int64 rc;
+                address schedule;
+                try HSS.scheduleCall(
+                    address(this), retryAt, SETTLE_GAS, 0, abi.encodeCall(this.settle, (marketId))
+                ) returns (
+                    int64 code, address booked
+                ) {
+                    (rc, schedule) = (code, booked);
+                } catch { }
+                if (rc != SUCCESS) {
+                    // forge-lint: disable-next-line(reentrancy-events)
+                    emit SettlementRetryFailed(marketId, rc);
+                    return;
+                }
                 m.retriesLeft -= 1;
                 _chargeReserve(m, retryCostEstimate);
                 m.schedule = schedule;
@@ -399,8 +415,8 @@ contract PredictionMarkets is ReentrancyGuard {
 
         // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp < uint256(m.expiry) + maxRoundLag) revert PythFallbackNotOpen();
-        (bool chainlinkFound,, uint256 chainlinkTime) = _firstRoundAtOrAfter(m.feedKey, m.expiry);
-        if (chainlinkFound && chainlinkTime <= uint256(m.expiry) + maxRoundLag) revert ChainlinkRoundAvailable();
+        (bool chainlinkEligible,,) = _eligibleChainlinkRound(m.feedKey, m.expiry);
+        if (chainlinkEligible) revert ChainlinkRoundAvailable();
 
         uint256 fee = IPyth(pyth).getUpdateFee(updateData);
         if (msg.value < fee) revert PythFeeInsufficient(msg.value, fee);
@@ -591,12 +607,44 @@ contract PredictionMarkets is ReentrancyGuard {
         return created;
     }
 
+    /// @notice The Chainlink round settle() would use for a market right now, if any.
+    /// @dev Lets a frontend offer "Settle now" only when settle() would succeed. Covers round eligibility
+    ///      only: the market must still be Open and expired, and one-sided markets settle Invalid without it.
+    /// @param marketId The market to check. Reverts InvalidMarketId for an unknown id.
+    /// @return eligible Whether a provably first round within maxRoundLag of expiry exists.
+    /// @return price The round price normalized to 1e18, zero when not eligible.
+    /// @return publishTime The round updatedAt timestamp, zero when not eligible.
+    function chainlinkSettlementRound(uint256 marketId)
+        external
+        view
+        returns (bool eligible, int256 price, uint256 publishTime)
+    {
+        Market storage m = _getMarket(marketId);
+        return _eligibleChainlinkRound(m.feedKey, m.expiry);
+    }
+
+    /// @notice The provably first Chainlink round at or after expiry, accepted only within maxRoundLag.
+    ///         Shared by settle, the Pyth precedence check and chainlinkSettlementRound.
+    function _eligibleChainlinkRound(bytes32 feedKey, uint64 expiry)
+        internal
+        view
+        returns (bool eligible, int256 price, uint256 priceTime)
+    {
+        (eligible, price, priceTime) = _firstRoundAtOrAfter(feedKey, expiry);
+        if (eligible && priceTime > uint256(expiry) + maxRoundLag) {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0, 0);
+        }
+    }
+
     /// @notice Finds the first Chainlink round with updatedAt >= expiry, walking back from latest.
     /// @dev A candidate is only returned once it is PROVEN first: the walk must reach an earlier round of the
     ///      same phase with updatedAt < expiry. Rounds with a non-positive answer are skipped (not a price).
     ///      Anything that stops the walk without that proof (48-step bound, phase boundary, first round of a
     ///      phase, a reverting or empty round) returns not found, so the market falls back to a retry, Pyth
-    ///      or voiding instead of settling on a round that may not be the first.
+    ///      or voiding instead of settling on a round that may not be the first. A feed whose latestRoundData
+    ///      or decimals reverts counts as not found too, so it can neither revert a scheduled call nor block
+    ///      the Pyth fallback.
     /// @return found Whether a provably first round exists.
     /// @return price The round price normalized to 1e18.
     /// @return priceTime The round updatedAt timestamp.
@@ -608,8 +656,15 @@ contract PredictionMarkets is ReentrancyGuard {
         IAggregatorV3 feed = IAggregatorV3(feeds[feedKey].chainlink);
         // The candidate is the earliest valid (positive) round at or after expiry seen so far; a
         // non-positive candidateAnswer means none has been seen yet.
-        // forge-lint: disable-next-line(unused-return)
-        (uint80 cursor, int256 candidateAnswer,, uint256 candidateTime,) = feed.latestRoundData();
+        uint80 cursor;
+        int256 candidateAnswer;
+        uint256 candidateTime;
+        try feed.latestRoundData() returns (uint80 roundId, int256 answer, uint256, uint256 updatedAt, uint80) {
+            (cursor, candidateAnswer, candidateTime) = (roundId, answer, updatedAt);
+        } catch {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0, 0);
+        }
         if (candidateTime < expiry || candidateTime == 0) {
             // forge-lint: disable-next-line(boolean-cst)
             return (false, 0, 0);
@@ -644,8 +699,13 @@ contract PredictionMarkets is ReentrancyGuard {
             // forge-lint: disable-next-line(boolean-cst)
             return (false, 0, 0);
         }
-        price = PriceMath.normalizeChainlink(candidateAnswer, feed.decimals());
-        priceTime = candidateTime;
+        try feed.decimals() returns (uint8 feedDecimals) {
+            price = PriceMath.normalizeChainlink(candidateAnswer, feedDecimals);
+            priceTime = candidateTime;
+        } catch {
+            // forge-lint: disable-next-line(boolean-cst)
+            return (false, 0, 0);
+        }
     }
 
     /// @notice Deducts an estimated network cost from a market's reserve, saturating at zero.

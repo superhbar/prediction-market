@@ -585,15 +585,242 @@ contract PredictionMarketsTest is Test {
         pm.settle(999);
     }
 
-    function test_Settle_RetryScheduleFailureReverts() public {
+    function test_Settle_ScheduledRetryBookingFailureKeepsAccounting() public {
         uint256 marketId = _createMarket();
         _stakeBothSides(marketId);
+        uint256 reserveBefore = pm.getMarket(marketId).reserve;
+        uint256 totalBefore = pm.totalReserves();
+        uint256 callsBefore = hss.callCount();
         vm.warp(expiry + 5);
         hss.setResponseCode(33);
-        vm.prank(address(pm));
+        vm.expectEmit(true, false, false, true, address(pm));
         // forge-lint: disable-next-line(unsafe-typecast)
-        vm.expectRevert(abi.encodeWithSelector(PredictionMarkets.ScheduleFailed.selector, int64(33)));
+        emit PredictionMarkets.SettlementRetryFailed(marketId, int64(33));
+        vm.prank(address(pm));
         pm.settle(marketId);
+        PredictionMarkets.Market memory m = pm.getMarket(marketId);
+        assertEq(uint256(m.state), uint256(State.Open));
+        assertFalse(m.schedulePending);
+        assertEq(m.retriesLeft, 2);
+        assertEq(m.reserve, reserveBefore - pm.SCHEDULED_EXECUTION_COST());
+        assertEq(pm.totalReserves(), totalBefore - pm.SCHEDULED_EXECUTION_COST());
+        assertEq(hss.callCount(), callsBefore + 1);
+    }
+
+    function test_Settle_ScheduledRetryRevertKeepsAccounting() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        uint256 reserveBefore = pm.getMarket(marketId).reserve;
+        uint256 totalBefore = pm.totalReserves();
+        vm.warp(expiry + 5);
+        vm.mockCallRevert(
+            address(hss),
+            abi.encodeWithSelector(MockHSS.scheduleCall.selector),
+            abi.encodeWithSelector(bytes4(0xdeadbeef))
+        );
+        vm.expectEmit(true, false, false, true, address(pm));
+        emit PredictionMarkets.SettlementRetryFailed(marketId, 0);
+        vm.prank(address(pm));
+        pm.settle(marketId);
+        vm.clearMockedCalls();
+        PredictionMarkets.Market memory m = pm.getMarket(marketId);
+        assertEq(uint256(m.state), uint256(State.Open));
+        assertFalse(m.schedulePending);
+        assertEq(m.retriesLeft, 2);
+        assertEq(m.reserve, reserveBefore - pm.SCHEDULED_EXECUTION_COST());
+        assertEq(pm.totalReserves(), totalBefore - pm.SCHEDULED_EXECUTION_COST());
+    }
+
+    function test_Settle_ManualUnknownIdStillReverts() public {
+        vm.expectRevert(PredictionMarkets.InvalidMarketId.selector);
+        pm.settle(999);
+    }
+
+    function test_View_InvalidIdReverts() public {
+        vm.expectRevert(PredictionMarkets.InvalidMarketId.selector);
+        pm.chainlinkSettlementRound(999);
+    }
+
+    function test_Oracle_LatestRevertsIsNotFound() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        _addSettlementRounds();
+        vm.warp(expiry + 1000);
+        vm.mockCallRevert(address(hbarFeed), abi.encodeWithSelector(MockAggregator.latestRoundData.selector), hex"");
+        (bool eligible,,) = pm.chainlinkSettlementRound(marketId);
+        assertFalse(eligible);
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
+        pm.settle(marketId);
+        vm.prank(address(pm));
+        pm.settle(marketId);
+        assertEq(pm.getMarket(marketId).retriesLeft, 1);
+        vm.clearMockedCalls();
+    }
+
+    function test_Oracle_PreviousRevertsIsNotFound() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        hbarFeed.addRound(20_000_000, expiry - 100);
+        hbarFeed.addRound(35_000_000, expiry + 50);
+        vm.warp(expiry + 1000);
+        vm.mockCallRevert(address(hbarFeed), abi.encodeWithSelector(MockAggregator.getRoundData.selector), hex"");
+        (bool eligible,,) = pm.chainlinkSettlementRound(marketId);
+        assertFalse(eligible);
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
+        pm.settle(marketId);
+        vm.clearMockedCalls();
+    }
+
+    function test_Oracle_DecimalsRevertsIsNotFound() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        _addSettlementRounds();
+        vm.warp(expiry + 1000);
+        vm.mockCallRevert(address(hbarFeed), abi.encodeWithSelector(MockAggregator.decimals.selector), hex"");
+        (bool eligible,,) = pm.chainlinkSettlementRound(marketId);
+        assertFalse(eligible);
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
+        pm.settle(marketId);
+        vm.clearMockedCalls();
+    }
+
+    function test_Normalization_Dec18Settles() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        hbarFeed.setDecimals(18);
+        hbarFeed.addRound(2e17, expiry - 100);
+        hbarFeed.addRound(35e16, expiry + 50);
+        vm.warp(expiry + 1000);
+        (bool eligible, int256 price, uint256 publishTime) = pm.chainlinkSettlementRound(marketId);
+        assertTrue(eligible);
+        assertEq(price, 35e16);
+        assertEq(publishTime, expiry + 50);
+        pm.settle(marketId);
+        assertEq(uint256(pm.getMarket(marketId).outcome), uint256(Outcome.Yes));
+    }
+
+    function test_Normalization_Dec30Settles() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        hbarFeed.setDecimals(30);
+        hbarFeed.addRound(2e29, expiry - 100);
+        hbarFeed.addRound(35e28, expiry + 50);
+        vm.warp(expiry + 1000);
+        (bool eligible, int256 price, uint256 publishTime) = pm.chainlinkSettlementRound(marketId);
+        assertTrue(eligible);
+        assertEq(price, 3.5e17);
+        assertEq(publishTime, expiry + 50);
+        pm.settle(marketId);
+        assertEq(uint256(pm.getMarket(marketId).outcome), uint256(Outcome.Yes));
+    }
+
+    function test_View_EligibleTrueMatchesSettle() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        _addSettlementRounds();
+        vm.warp(expiry + 1000);
+        (bool eligible, int256 price, uint256 publishTime) = pm.chainlinkSettlementRound(marketId);
+        assertTrue(eligible);
+        assertEq(price, 3.5e17);
+        assertEq(publishTime, expiry + 50);
+        pm.settle(marketId);
+        assertEq(pm.getMarket(marketId).settlementPrice, price);
+        assertEq(pm.getMarket(marketId).settlementTime, publishTime);
+    }
+
+    function test_View_FalseBeyondLagMatchesSettle() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        hbarFeed.addRound(20_000_000, expiry - 100);
+        hbarFeed.addRound(35_000_000, expiry + 2 hours + 1);
+        vm.warp(expiry + 3 hours);
+        (bool eligible,,) = pm.chainlinkSettlementRound(marketId);
+        assertFalse(eligible);
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
+        pm.settle(marketId);
+    }
+
+    function test_Settle_RevertingFeedExhaustsRetriesKeepsCharges() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        uint256 reserveBefore = pm.getMarket(marketId).reserve;
+        uint256 totalBefore = pm.totalReserves();
+        vm.warp(expiry + 5);
+        vm.mockCallRevert(address(hbarFeed), abi.encodeWithSelector(MockAggregator.latestRoundData.selector), hex"");
+        for (uint256 i = 0; i < 2; ++i) {
+            vm.prank(address(pm));
+            pm.settle(marketId);
+            PredictionMarkets.Market memory retry = pm.getMarket(marketId);
+            assertTrue(retry.schedulePending);
+            assertEq(retry.retriesLeft, 1 - i);
+            assertEq(retry.reserve, reserveBefore - (i + 1) * (pm.SCHEDULED_EXECUTION_COST() + RETRY_COST));
+            vm.warp(block.timestamp + 10 minutes);
+        }
+        vm.expectEmit(true, false, false, true, address(pm));
+        emit PredictionMarkets.SettlementRetriesExhausted(marketId);
+        vm.prank(address(pm));
+        pm.settle(marketId);
+        PredictionMarkets.Market memory m = pm.getMarket(marketId);
+        uint256 charged = 3 * pm.SCHEDULED_EXECUTION_COST() + 2 * RETRY_COST;
+        assertEq(m.reserve, reserveBefore - charged);
+        assertEq(pm.totalReserves(), totalBefore - charged);
+        assertEq(m.retriesLeft, 0);
+        assertFalse(m.schedulePending);
+        assertEq(uint256(m.state), uint256(State.Open));
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
+        pm.settle(marketId);
+        assertEq(pm.getMarket(marketId).reserve, m.reserve);
+        vm.clearMockedCalls();
+    }
+
+    function test_View_FalseUnprovenMatchesSettle() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        hbarFeed.nextPhase();
+        hbarFeed.addRound(35_000_000, expiry + 10);
+        vm.warp(expiry + 1000);
+        (bool eligible,,) = pm.chainlinkSettlementRound(marketId);
+        assertFalse(eligible);
+        vm.expectRevert(PredictionMarkets.NoEligibleRound.selector);
+        pm.settle(marketId);
+    }
+
+    function test_View_LagBoundary() public {
+        uint256 atLag = _createMarket();
+        _stakeBothSides(atLag);
+        hbarFeed.addRound(20_000_000, expiry - 100);
+        hbarFeed.addRound(35_000_000, expiry + 2 hours);
+        vm.warp(expiry + 3 hours);
+        (bool eligibleAt,, uint256 timeAt) = pm.chainlinkSettlementRound(atLag);
+        assertTrue(eligibleAt);
+        assertEq(timeAt, expiry + 2 hours);
+        pm.settle(atLag);
+        assertEq(uint256(pm.getMarket(atLag).outcome), uint256(Outcome.Yes));
+    }
+
+    function test_SettleWithPyth_SucceedsAfterLagWithUnreadableFeed() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        vm.mockCallRevert(address(hbarFeed), abi.encodeWithSelector(MockAggregator.latestRoundData.selector), hex"");
+        bytes[] memory updateData = _pythUpdate(expiry + 5, 25_000_000);
+        uint256 fee = pyth.getUpdateFee(updateData);
+        vm.warp(expiry + 2 hours);
+        _settlePythAs(CAROL, marketId, updateData, fee);
+        vm.clearMockedCalls();
+        assertEq(uint256(pm.getMarket(marketId).source), uint256(PriceSource.Pyth));
+        assertEq(uint256(pm.getMarket(marketId).outcome), uint256(Outcome.No));
+    }
+
+    function test_SettleWithPyth_RefusesBeforeLagWithUnreadableFeed() public {
+        uint256 marketId = _createMarket();
+        _stakeBothSides(marketId);
+        vm.mockCallRevert(address(hbarFeed), abi.encodeWithSelector(MockAggregator.latestRoundData.selector), hex"");
+        bytes[] memory updateData = _pythUpdate(expiry + 5, 25_000_000);
+        uint256 fee = pyth.getUpdateFee(updateData);
+        vm.warp(expiry + 2 hours - 1);
+        vm.expectRevert(PredictionMarkets.PythFallbackNotOpen.selector);
+        _settlePythAs(CAROL, marketId, updateData, fee);
+        vm.clearMockedCalls();
     }
 
     // Pyth settlement
