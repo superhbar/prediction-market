@@ -61,14 +61,10 @@ export const HeaderMenuLinks = () => {
   );
 };
 
-/** Logo tile. Replace it with your own mark; the letter comes from BRAND. */
+/** Logo mark from public/logo.png. Replace that file with your own. */
 const LogoMark = () => (
-  <span
-    aria-hidden
-    className="grid place-items-center w-7 h-7 rounded-lg bg-primary text-primary-content text-sm font-extrabold"
-  >
-    {BRAND.logoLetter}
-  </span>
+  // eslint-disable-next-line @next/next/no-img-element
+  <img src="/logo.png" alt="" width={28} height={28} className="w-7 h-7" />
 );
 
 /**

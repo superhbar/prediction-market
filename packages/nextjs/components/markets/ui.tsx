@@ -1,21 +1,37 @@
 import type { PricePoint } from "~~/hooks/markets/useChainlinkHistory";
-import { ASSET_COLORS } from "~~/utils/brand";
+import { ASSET_ICONS } from "~~/utils/brand";
 import type { UiStatus } from "~~/utils/markets/types";
 
-/** Round coin tile for a feed like "BTC/USD": the base symbol on the asset's color. */
+/** Coin icon for a feed like "BTC/USD": the base asset, with the quote currency as a small badge. */
 export function AssetBadge({ feedLabel, size = "md" }: { feedLabel: string; size?: "md" | "lg" }) {
-  const symbol = feedLabel.split("/")[0] ?? feedLabel;
-  const box = size === "lg" ? "w-12 h-12 text-xs" : "w-9 h-9 text-[10px]";
-  const colors = ASSET_COLORS[symbol];
+  const [base = feedLabel, quote] = feedLabel.split("/");
+  const box = size === "lg" ? "w-12 h-12" : "w-9 h-9";
+  const badge = size === "lg" ? "w-5 h-5" : "w-4 h-4";
   return (
-    <span
-      aria-hidden
-      style={colors}
-      className={`${box} shrink-0 grid place-items-center rounded-full font-bold ${colors ? "" : "bg-base-300"}`}
-    >
-      {symbol.slice(0, 4)}
+    <span aria-hidden className={`${box} relative shrink-0`}>
+      <CoinIcon symbol={base} className="w-full h-full" />
+      {quote && (
+        <CoinIcon
+          symbol={quote}
+          className={`${badge} absolute -right-0.5 -bottom-0.5 outline-2 outline-base-100`}
+        />
+      )}
     </span>
   );
+}
+
+function CoinIcon({ symbol, className }: { symbol: string; className: string }) {
+  const src = ASSET_ICONS[symbol];
+  if (!src) {
+    return (
+      <span className={`${className} grid place-items-center rounded-full bg-base-300 text-[10px] font-bold`}>
+        {symbol.slice(0, 4)}
+      </span>
+    );
+  }
+  // Static local SVGs: a plain img keeps them out of the image optimizer.
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={src} alt="" className={`${className} rounded-full ring-1 ring-base-content/15`} />;
 }
 
 const STATUS_COLOR: Record<UiStatus, string> = {

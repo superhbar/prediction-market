@@ -1,4 +1,5 @@
 import type { PricePoint } from "~~/hooks/markets/useChainlinkHistory";
+import { shortExpiry } from "~~/utils/markets/question";
 import { formatExactPrice, formatPrice } from "~~/utils/markets/units";
 
 type PriceChartProps = {
@@ -46,6 +47,8 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
   // When the strike is the chart's maximum its label goes under the line, so it is not clipped.
   const strikeLabelY = strikeY < PAD + 16 ? strikeY + 18 : strikeY - 8;
   const settleIndex = expiry === undefined ? -1 : points.findIndex(point => point.timestamp >= expiry);
+  // Expired, but the feed has not published since: the price above is not the settlement price.
+  const waitingForRound = expiry !== undefined && settleIndex < 0 && BigInt(Math.floor(Date.now() / 1000)) >= expiry;
   // Near the right edge the marker label flips to the left of its line so it is not clipped.
   const settleLabelLeft = settleIndex >= 0 && x(settleIndex) > WIDTH * 0.7;
 
@@ -121,6 +124,13 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
         {points.length} Chainlink rounds, latest <strong>{formatPrice(last.normalized)}</strong> against a strike of{" "}
         <strong>{formatExactPrice(strike)}</strong>.
       </p>
+      {waitingForRound && (
+        <p className="mt-2 mb-0 rounded-[10px] border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-base-content/80">
+          Every round shown was published before expiry, so none can settle this market. Chainlink last published at{" "}
+          {shortExpiry(last.timestamp)}. The market settles on the first round published after{" "}
+          {expiry !== undefined ? shortExpiry(expiry) : "expiry"}.
+        </p>
+      )}
     </section>
   );
 }

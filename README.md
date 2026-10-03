@@ -236,10 +236,10 @@ The app is a working product, but every visual and naming decision sits in three
 
 | What | Where |
 |---|---|
-| Name, short name, description, logo letter | `packages/nextjs/utils/brand.ts` (`BRAND`), used by the header, page metadata, web app manifest and wallet modal |
+| Name, short name, description | `packages/nextjs/utils/brand.ts` (`BRAND`), used by the header, page metadata, web app manifest and wallet modal |
 | Colors, radii, fonts | `packages/nextjs/styles/globals.css`: the dark `hedera` theme (default), the `hedera-light` theme, and the `--color-yes` / `--color-no` outcome colors in `@theme` |
 | Font families | `packages/nextjs/app/layout.tsx` (`next/font` Inter and JetBrains Mono); swap them and keep the CSS variable names |
-| Logo | `LogoMark` in `packages/nextjs/components/Header.tsx` |
+| Logo and coin icons | `packages/nextjs/public/logo.png` (header, favicon, app icons) and `public/coins/*.svg`, mapped in `ASSET_ICONS` in `brand.ts` |
 
 Components only use semantic classes (`bg-base-100`, `text-primary`, `bg-yes`, `text-no`, `.panel`), never raw hex values, so editing a theme recolors every page, including the price chart, which draws with `var(--color-primary)` and `var(--color-secondary)`. Shared market UI (asset badge, status pill, YES/NO bar) lives in `packages/nextjs/components/markets/ui.tsx`.
 

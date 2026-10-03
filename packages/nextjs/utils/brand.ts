@@ -1,13 +1,11 @@
 /**
- * App identity in one place. Rename the app here; colors, fonts and radii live in styles/globals.css.
+ * App identity in one place. Rename the app here and replace public/logo.png; colors, fonts and radii live in styles/globals.css.
  * The hex values below repeat the theme for the places CSS variables cannot reach (the web app
  * manifest, the wallet modal and the route progress bar), so keep them in step with the themes.
  */
 export const BRAND = {
   name: "Predera",
   shortName: "Predera",
-  /** Letter on the header logo tile. Replace the LogoMark component in Header.tsx for a real logo. */
-  logoLetter: "P",
   description:
     "Binary price prediction markets on Hedera. Stake HBAR on YES or NO, settled by Chainlink with a Pyth fallback.",
   /** Theme primary, used by the wallet modal accent and the route progress bar. */
@@ -18,9 +16,14 @@ export const BRAND = {
   backgroundColor: "#0f1729",
 } as const;
 
-/** Coin tile colors per asset symbol; unknown symbols fall back to the theme's neutral surface. */
-export const ASSET_COLORS: Record<string, { background: string; color: string }> = {
-  HBAR: { background: "#000000", color: "#ffffff" },
-  BTC: { background: "#f7931a", color: "#ffffff" },
-  ETH: { background: "#627eea", color: "#ffffff" },
+/**
+ * Coin icons per asset symbol, served from public/coins. BTC, ETH and USD come from the CC0
+ * cryptocurrency-icons set; HBAR is the official Hedera icon that ships with the scaffold. Add an entry
+ * when you add a feed; unknown symbols fall back to a lettered tile.
+ */
+export const ASSET_ICONS: Record<string, string> = {
+  HBAR: "/coins/hbar.svg",
+  BTC: "/coins/btc.svg",
+  ETH: "/coins/eth.svg",
+  USD: "/coins/usd.svg",
 };

@@ -45,10 +45,10 @@ export const getMetadata = ({
     },
     icons: {
       icon: [
-        { url: "/icon.svg", type: "image/svg+xml" },
+        { url: "/logo.png", sizes: "256x256", type: "image/png" },
         { url: "/favicon.png", sizes: "32x32", type: "image/png" },
       ],
-      apple: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
     },
   };
 };
