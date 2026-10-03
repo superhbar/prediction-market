@@ -27,7 +27,7 @@ Prerequisites:
 - Node.js >= 20.18.3.
 - yarn (default) or npm. If you scaffolded with npm, replace `yarn <script>` below with `npm run <script>`.
 - Foundry (`forge`, `cast`) for contract work. The frontend alone does not need it.
-- A Hedera testnet account. Use the Hedera Portal (portal.hedera.com, 1000 HBAR per day), not the 10 HBAR per day faucet. Creating a market costs about 23 HBAR in HTS fees plus a 7 HBAR settlement reserve.
+- A Hedera testnet account. Use the Hedera Portal (portal.hedera.com, 1000 HBAR per day), not the 10 HBAR per day faucet. Creating a market costs about 23 HBAR in HTS fees plus an 8.5 HBAR settlement reserve.
 
 Run against the shipped testnet deployment (no deploy needed):
 
@@ -105,7 +105,7 @@ sequenceDiagram
     alt round exists
         PM->>PM: finalize (YES if price >= strike, else NO)
     else no round yet
-        PM->>HSS: book retry (+15 min, up to 3 retries from reserve)
+        PM->>HSS: book retry (+30 min, up to 4 retries from reserve)
     end
     Trader->>PM: redeem(marketId, side, amount)
     PM->>HTS: wipe caller's tokens
@@ -129,7 +129,7 @@ The contract only settles on a Chainlink round it can prove is first: walking ba
 
 ### Self-scheduling and retries (HIP-1215)
 
-At creation the contract books `settle(marketId)` as a scheduled call for expiry plus 10 minutes through the Schedule Service at `0x16b`. Inside a scheduled call, `msg.sender` equals the contract itself, which is how `settle` knows it was invoked by the network. If no Chainlink round exists at or after expiry yet, the scheduled call books its own retry (plus 15 minutes, up to 3 retries) from the market's reserve instead of reverting. Anyone can also call `settle` directly once a round exists.
+At creation the contract books `settle(marketId)` as a scheduled call for expiry plus 10 minutes through the Schedule Service at `0x16b`. Inside a scheduled call, `msg.sender` equals the contract itself, which is how `settle` knows it was invoked by the network. If no Chainlink round exists at or after expiry yet, the scheduled call books its own retry (plus 30 minutes, up to 4 retries, so checks run at +10, +40, +70, +100 and +130 minutes and cover the whole 2 hour round window) from the market's reserve instead of reverting. Anyone can also call `settle` directly once a round exists.
 
 ### Pyth fallback and voiding
 
@@ -153,7 +153,7 @@ Wallets and JSON-RPC send weibar (18 decimals). Inside the EVM, `msg.value` and 
 
 ### Fees and the reserve
 
-The network bills the contract for scheduled executions (a settle measured 127k gas, 0.104 HBAR at 82 tinybar per gas) and retry bookings (about 1.17 HBAR). Each market keeps its own reserve: 0.5 HBAR is charged per scheduled execution and 1.5 HBAR per retry. Creation requires at least 7 HBAR of reserve after the two HTS creation fees (about 23 HBAR total at the measured rate of $1 = 9.61 HBAR).
+The network bills the contract for scheduled executions (a settle measured 127k gas, 0.104 HBAR at 82 tinybar per gas) and retry bookings (about 1.17 HBAR). Each market keeps its own reserve: 0.5 HBAR is charged per scheduled execution and 1.5 HBAR per retry. Creation requires at least 8.5 HBAR of reserve after the two HTS creation fees (about 23 HBAR total at the measured rate of $1 = 9.61 HBAR).
 
 `totalPoolLiability` tracks HBAR owed to traders and `totalReserves` tracks the sum of market reserves, so `withdrawReserve` pays only the surplus beyond trader pools and other markets' reserves. If fees were underestimated, the shortfall reduces what that market's creator can withdraw.
 
@@ -285,7 +285,7 @@ Common changes:
 | Market stuck awaiting settlement | No Chainlink round at or after expiry exists yet, or retries ran out | Wait for the next retry, call `settle` once a round exists, or use the Pyth fallback. After the 24 hour grace period anyone can void |
 | "Settle with Pyth" button disabled or explains setup | `PYTH_API_KEY` is not set (Hermes requires an API key since 2026-08-26) | Set `PYTH_API_KEY` in `packages/nextjs/.env` and retry. Chainlink settlement and voiding work without it |
 | Stake reverts with `TokenTransferFailed(184)` | Response code 184 is `TOKEN_NOT_ASSOCIATED_TO_ACCOUNT`: the staker's account has no free auto-association slot and is not associated with the position token | Use the one-click association prompt in the stake panel, then stake again. First stake per token per account costs about 0.65 HBAR (auto-association) versus about 0.04 HBAR normally |
-| Balance too low after using the faucet | The faucet gives 10 HBAR per day; a market needs about 23 HBAR in token fees plus a 7 HBAR reserve | Get a Hedera Portal testnet account (portal.hedera.com, 1000 HBAR per day) |
+| Balance too low after using the faucet | The faucet gives 10 HBAR per day; a market needs about 23 HBAR in token fees plus an 8.5 HBAR reserve | Get a Hedera Portal testnet account (portal.hedera.com, 1000 HBAR per day) |
 | Wallet is on the wrong network | MetaMask points at mainnet or a local node while the app targets testnet | Switch the wallet to Hedera testnet (chain id 296, RPC https://testnet.hashio.io/api) and reload |
 
 ## Using Hedera Harness

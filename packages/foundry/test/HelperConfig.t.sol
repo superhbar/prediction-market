@@ -26,13 +26,13 @@ contract HelperConfigTest is Test {
         assertEq(feeds[0].chainlink, 0x59bC155EB6c6C415fE43255aF66EcF0523c92B4a);
         assertEq(pyth, 0xA2aa501b19aff244D90cc15a4Cf739D2725B5729);
         assertEq(cfg.settlementDelay, 10 minutes);
-        assertEq(cfg.retryDelay, 15 minutes);
-        assertEq(cfg.maxRetries, 3);
+        assertEq(cfg.retryDelay, 30 minutes);
+        assertEq(cfg.maxRetries, 4);
         assertEq(cfg.maxRoundLag, 2 hours);
         assertEq(cfg.gracePeriod, 24 hours);
         assertEq(cfg.minDuration, 5 minutes);
         assertEq(cfg.maxDuration, 60 days);
-        assertEq(cfg.minReserve, 7e8);
+        assertEq(cfg.minReserve, 8.5e8);
         assertEq(cfg.retryCostEstimate, 1.5e8);
     }
 
@@ -44,7 +44,7 @@ contract HelperConfigTest is Test {
         assertEq(feeds[1].chainlink, 0xaD01E27668658Cc8c1Ce6Ed31503D75F31eEf480);
         assertEq(feeds[2].chainlink, 0xd2D2CB0AEb29472C3008E291355757AD6225019e);
         assertEq(pyth, 0xA2aa501b19aff244D90cc15a4Cf739D2725B5729);
-        assertEq(cfg.minReserve, 7e8);
+        assertEq(cfg.minReserve, 8.5e8);
     }
 
     function test_GetConfig_RevertsUnknownChain() public {

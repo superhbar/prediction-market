@@ -87,17 +87,18 @@ abstract contract HelperConfig {
     /// @notice Returns the default timing and reserve configuration.
     function buildConfig() public pure returns (Config memory cfg) {
         cfg = Config({
-            // Testnet Chainlink rounds arrive 3 to 46 minutes apart (measured), so the scheduled path
-            // tries at +10, +25, +40 and +55 minutes after expiry before anyone needs the fallback.
+            // Testnet Chainlink feeds can go quiet for hours, so the scheduled path keeps checking across the
+            // whole maxRoundLag window: +10, +40, +70, +100 and +130 minutes after expiry. The last check
+            // still accepts a round published up to 2 hours after expiry.
             settlementDelay: 10 minutes,
-            retryDelay: 15 minutes,
-            maxRetries: 3,
+            retryDelay: 30 minutes,
+            maxRetries: 4,
             maxRoundLag: 2 hours,
             gracePeriod: 24 hours,
             minDuration: 5 minutes,
             maxDuration: 60 days,
-            // 3 retries x 1.5 HBAR plus 4 scheduled executions x 0.5 HBAR.
-            minReserve: 7e8,
+            // 4 retries x 1.5 HBAR plus 5 scheduled executions x 0.5 HBAR.
+            minReserve: 8.5e8,
             retryCostEstimate: 1.5e8
         });
     }

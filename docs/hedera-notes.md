@@ -58,7 +58,7 @@ something looks different.
 
 ## Costs to plan for
 
-- Creating a market: two token creations (about $2 in HBAR) plus a reserve of at least 7 HBAR. The
+- Creating a market: two token creations (about $2 in HBAR) plus a reserve of at least 8.5 HBAR. The
   create form suggests about 33 HBAR at the testnet rate. Whatever the token fees do not use becomes
   the market's reserve, and the creator can withdraw what is left of it after the market closes.
 - A stake: about 0.04 HBAR in gas, or about 0.65 HBAR for your first stake on each token

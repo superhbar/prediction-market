@@ -59,7 +59,7 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 - `forge script --broadcast` cannot reach Hashio (EIP-1898 `eth_getTransactionCount`). Deploy and e2e use `cast send`. Keep it that way.
 - `msg.value` in the EVM is tinybar (8 decimals); wallets send weibar (18 decimals); the relay converts. Contract amounts, pools, reserves, and token balances are tinybar; strike and settlement prices are 1e18 fixed point.
 - First stake per token per account costs ~0.65 HBAR (auto-association); later stakes ~0.04 HBAR. The UI must keep the association prompt.
-- Market creation costs two HTS creations (~$1 each, ~23 HBAR at $1 = 9.61 HBAR) plus a 7 HBAR minimum reserve. Point users at the Portal faucet (1000 HBAR/day).
+- Market creation costs two HTS creations (~$1 each, ~23 HBAR at $1 = 9.61 HBAR) plus an 8.5 HBAR minimum reserve. Point users at the Portal faucet (1000 HBAR/day).
 - Scheduled `settle` runs with 2.5M gas (constant `SETTLE_GAS`); 1.2M cannot book a nested retry. Each retry costs the reserve ~1.17 HBAR (charged 1.5 HBAR); each execution ~0.104 HBAR (charged 0.5 HBAR).
 - `hedera-forking` does not emulate HSS: keep the `vm.etch` mocks for unit tests and prove scheduling on real testnet via e2e.
 - HTS `burnToken` only burns from treasury, so redeem uses `wipeTokenAccount` (wipe key). No approve step exists by design.
