@@ -8,7 +8,7 @@ npm create scaffold-hbar@latest -- --template superhbar/prediction-market
 
 ![A settled market on Hedera testnet: the scheduled call booked one retry, then settled NO on Chainlink, and every step is in the activity panel with a Hashscan link](docs/screenshots/market-detail.png)
 
-More screenshots: [an open market with the payout preview](docs/screenshots/market-open.png), [market list](docs/screenshots/markets.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [dark theme](docs/screenshots/market-detail-dark.png). All are taken from the production build against the live testnet deployment.
+More screenshots: [an open market with the payout preview](docs/screenshots/market-open.png), [market list](docs/screenshots/markets.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [light theme](docs/screenshots/market-detail-light.png). All are taken from the production build against the live testnet deployment.
 
 ## What you get
 
