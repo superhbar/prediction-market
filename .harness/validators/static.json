@@ -15,8 +15,7 @@
       "packages/nextjs/components/markets/ActivityPanel.tsx",
       ".harness/spec.yaml",
       ".harness/prds/01-market-activity.md",
-      ".harness/validators/command.cjs",
-      ".harness/validators/loaded-smoke.cjs"
+      ".harness/validators/command.cjs"
     ],
     "forbidden": [
       ".env",

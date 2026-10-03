@@ -290,9 +290,9 @@ Common changes:
 |---|---|
 | `.harness/spec.yaml` | Recipe (schema v2): agent, baseline commands, validators, Tier 3 contract, Tier 3.5 chain validation |
 | `.harness/prds/01-market-activity.md` | The feature brief, including the mirror node facts the agent needs (filter logs by `topics[1]` on the client) |
-| `.harness/validators/static.json` | Tier 0: template shape, docs, forbidden env files, required feature files |
-| `.harness/validators/yarn.json` | Tier 1: install, lint, type-check, vitest, forge tests, production build |
-| `.harness/validators/playwright-smoke.yaml` | Tier 2: boots the app and loads `/`, `/markets/0`, `/markets/new`, `/portfolio` and a missing market with zero console errors. `/debug` is excluded: the upstream debug-contracts package calls CoinGecko itself |
+| `.harness/validators/static.json` | Tier 0: docs, forbidden env files, required feature files. Holds in a freshly scaffolded project, where `template.json` is already gone |
+| `.harness/validators/yarn.json` | Tier 1: install, lint, type-check, vitest, forge tests, production build. Each runs through `command.cjs`, which picks yarn or npm from `package.json` (the file keeps the Harness default name) |
+| `.harness/validators/playwright-smoke.yaml` | Tier 2: boots the app on port 20960 (`PORT` overrides) and loads `/`, `/markets/0`, `/markets/new`, `/portfolio` and a missing market with zero console errors. `/debug` is excluded: the upstream debug-contracts package calls CoinGecko itself |
 | `.harness/acceptance-contract.json` | Tier 3: five numbered assertions graded against market 0's real testnet history |
 
 Check the recipe and run the cheap tiers (no agent, no keys):
