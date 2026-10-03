@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-hbar/contract";
 const deployedContracts = {
   296: {
     PredictionMarkets: {
-      address: "0x45F344b4ce70B90BDC6e439559e6160B23c5AcED",
+      address: "0x2528B83f1B73780a226838039376cc1435b5F289",
       abi: [
         {
           type: "constructor",
@@ -1104,7 +1104,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 41301423,
+      deployedOnBlock: 41306777,
     },
   },
 } as const;

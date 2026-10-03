@@ -5,6 +5,7 @@ import { ActivityPanel } from "~~/components/markets/ActivityPanel";
 import { Countdown } from "~~/components/markets/Countdown";
 import { OddsBar } from "~~/components/markets/OddsBar";
 import { PriceChart } from "~~/components/markets/PriceChart";
+import { RecordPanel } from "~~/components/markets/RecordPanel";
 import { RedeemPanel } from "~~/components/markets/RedeemPanel";
 import { SettlementTimeline } from "~~/components/markets/SettlementTimeline";
 import { StakePanel } from "~~/components/markets/StakePanel";
@@ -141,6 +142,7 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
             <StakePanel marketId={Number(id)} market={market} status={status} initialSide={initialSide} />
             <TradePanel market={market} />
             <RedeemPanel marketId={Number(id)} market={market} />
+            <RecordPanel marketId={Number(id)} market={market} />
           </div>
         </div>
       </div>

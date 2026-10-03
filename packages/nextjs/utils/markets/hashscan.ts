@@ -28,7 +28,7 @@ export function entityIdToLongZero(entityId: string): `0x${string}` {
   return `0x${num.toString(16).padStart(40, "0")}`;
 }
 
-export type HashscanKind = "contract" | "token" | "schedule" | "transaction" | "account";
+export type HashscanKind = "contract" | "token" | "schedule" | "transaction" | "account" | "topic";
 
 /** Hashscan URL for an entity. Pass the 0.0.x id; long-zero addresses are converted. */
 export function hashscanLink(chainId: number, kind: HashscanKind, idOrAddress: string): string {

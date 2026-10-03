@@ -37,6 +37,18 @@
         "description": "packages/nextjs/.env.local, optional: overrides the Pyth Hermes endpoint (default https://hermes.pyth.network)."
       },
       {
+        "key": "HCS_RECORD_TOPIC_ID",
+        "description": "packages/nextjs/.env.local, optional: HCS topic for public settlement records. Create one with node packages/nextjs/scripts/createRecordTopic.mjs."
+      },
+      {
+        "key": "HEDERA_OPERATOR_ID",
+        "description": "packages/nextjs/.env.local, optional, server-only: Hedera account (0.0.x) that pays for publishing settlement records."
+      },
+      {
+        "key": "HEDERA_OPERATOR_KEY",
+        "description": "packages/nextjs/.env.local, optional, server-only: private key of HEDERA_OPERATOR_ID. Never prefix it with NEXT_PUBLIC_."
+      },
+      {
         "key": "DEPLOYER_PRIVATE_KEY",
         "description": "Funded testnet ECDSA key for the end-to-end lifecycle check (DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet). Automation only, never commit it."
       }

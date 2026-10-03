@@ -47,7 +47,7 @@ yarn install
 yarn next:dev
 ```
 
-Open http://localhost:3000. The frontend bindings in `packages/nextjs/contracts/deployedContracts.ts` already point at the live testnet deployment, so the app works before you deploy anything. Market 9 shows a finished lifecycle: a SaucerSwap pool and trades, two self-booked retries, settlement YES, redeem and reserve withdrawal. Markets 1 to 8 (HBAR, BTC and ETH) stay open until dates between 10 October and 30 November 2026, so you can stake on them straight away.
+Open http://localhost:3000. The frontend bindings in `packages/nextjs/contracts/deployedContracts.ts` already point at the live testnet deployment, so the app works before you deploy anything. Market 0 is the end-to-end run: a SaucerSwap pool and trades, then scheduled settlement, redeem and reserve withdrawal. Markets 1 to 8 (HBAR, BTC and ETH) stay open until dates between 10 October and 30 November 2026, so you can stake on them straight away.
 
 Connect a wallet set to Hedera testnet (chain id 296, RPC https://testnet.hashio.io/api), for example MetaMask with the Hedera network added. For read-only browsing, no wallet is needed: every core route renders without one.
 
@@ -85,6 +85,9 @@ The script creates a six-minute market, stakes both sides, opens a SaucerSwap po
 | `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | `packages/nextjs/.env` | No (shared default for local testing; set your own for production) | WalletConnect project id for RainbowKit |
 | `PYTH_API_KEY` | `packages/nextjs/.env` | No | Server-only key for the Pyth Hermes proxy at `app/api/pyth`. Without it the app runs fully and the fallback button explains how to enable it |
 | `PYTH_HERMES_URL` | `packages/nextjs/.env` | No | Override for the Pyth Hermes endpoint (default https://hermes.pyth.network) |
+| `HCS_RECORD_TOPIC_ID` | `packages/nextjs/.env` | No | HCS topic for settlement records (create one with `node packages/nextjs/scripts/createRecordTopic.mjs`). Shows the Public record panel |
+| `HEDERA_OPERATOR_ID` | `packages/nextjs/.env` | No | Hedera account id (0.0.x) that pays for publishing records. Server-only |
+| `HEDERA_OPERATOR_KEY` | `packages/nextjs/.env` | No | Private key of that account (hex ECDSA or DER). Server-only: never prefix it with `NEXT_PUBLIC_` |
 | `HEDERA_RPC_URL` | `packages/foundry/.env` | No (has a default) | RPC used by fork tests (default https://testnet.hashio.io/api) |
 | `LOCALHOST_KEYSTORE_ACCOUNT` | `packages/foundry/.env` | No (has a default) | Keystore used for localhost deploys |
 | `DEPLOYER_PRIVATE_KEY` | env, e2e and automation only | Yes, for e2e | Funded testnet ECDSA key consumed by `yarn foundry:e2e:testnet`. Never commit it, never prefix it with `NEXT_PUBLIC_` |
@@ -179,6 +182,16 @@ Measured on testnet (`yarn foundry:e2e:testnet` runs all three steps):
 
 Pair paths use the WHBAR token `0.0.15058`; the router's `WHBAR()` returns the wrapper contract `0.0.15057`, which is not the token in the pair. Addresses live in `packages/nextjs/utils/markets/saucerswap.ts`.
 
+### Public settlement record (HCS)
+
+Each closed market can get a permanent public record on the Hedera Consensus Service: one message on a topic with the market's question, strike, expiry, pools, outcome, oracle source, price and publish time. Consensus gives the record a sequence number and timestamp nobody can change, and anyone can read the topic from the mirror node without this app.
+
+- `POST /api/record { marketId }` publishes it. The server reads the market from the contract, refuses markets that are still open, checks the topic so a market is never recorded twice, and pays with its operator account. Anyone can trigger it from the **Public record on HCS** panel on a closed market's page.
+- `GET /api/record?marketId=0` returns the record with its sequence number and consensus time. Readers take the first record per market in consensus order, so even two simultaneous publishes leave one answer.
+- The topic is created with the operator's key as submit key (`node packages/nextjs/scripts/createRecordTopic.mjs`), so only the app's server can write to it. The record format lives in `utils/markets/record.ts` with its tests.
+
+It is optional and server-only: set `HCS_RECORD_TOPIC_ID` to show records, and `HEDERA_OPERATOR_ID` plus `HEDERA_OPERATOR_KEY` to publish. Without them the panel is hidden and everything else works. The live demo publishes to topic [0.0.10842885](https://hashscan.io/testnet/topic/0.0.10842885).
+
 ### Read API for scripts and agents
 
 The app serves a small read-only JSON API from the same Next.js server, so a script or an AI agent can follow markets without a wallet or an ABI:
@@ -220,6 +233,7 @@ flowchart LR
     end
     subgraph Server["Next.js server routes"]
         PythProxy["/api/pyth<br/>Hermes proxy, key stays here"]
+        RecordApi["/api/record<br/>HCS settlement records"]
     end
     subgraph Hedera["Hedera testnet"]
         Relay["JSON-RPC relay (Hashio)"]
@@ -231,6 +245,7 @@ flowchart LR
         PythC["Pyth contract"]
         SS["SaucerSwap V1<br/>router and pairs"]
         Mirror["Mirror node REST"]
+        HCS["Consensus Service<br/>record topic"]
     end
     Hermes["Pyth Hermes"]
 
@@ -246,9 +261,12 @@ flowchart LR
     SS -->|"swap position tokens"| HTS
     UI -->|"events, schedules, balances, rates"| Mirror
     UI --> PythProxy --> Hermes
+    UI --> RecordApi
+    RecordApi -->|"submit once per closed market"| HCS
+    RecordApi -->|"read topic messages"| Mirror
 ```
 
-The contract talks to three Hedera system contracts and two oracles; the browser only needs the relay, the mirror node and, for the Pyth fallback, the server route. SaucerSwap sits beside the contract rather than inside it: the contract never calls the DEX, so a pool problem cannot block settlement or redeem.
+The contract talks to three Hedera system contracts and two oracles; the browser only needs the relay, the mirror node and, for the Pyth fallback and the HCS record, the server routes. SaucerSwap sits beside the contract rather than inside it: the contract never calls the DEX, so a pool problem cannot block settlement or redeem.
 
 ```text
 packages/foundry/
@@ -273,6 +291,8 @@ packages/nextjs/
   app/api/pyth/route.ts             Server-only Hermes proxy; PYTH_API_KEY never reaches the browser
   app/api/markets/                  Read-only JSON API: market list and one market with its quotePayout
   app/llms.txt/route.ts             Plain-text guide for LLM agents, generated from the deployment
+  app/api/record/route.ts           Publishes and reads HCS settlement records (server-only operator key)
+  scripts/createRecordTopic.mjs     Creates the HCS record topic with the operator as submit key
   components/markets/               MarketCard, StakePanel, TradePanel (SaucerSwap), RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, ui (shared badges and bars)
   styles/globals.css                Both daisyUI themes and the YES/NO colors: the whole look in one file
   utils/brand.ts                    App name, description and the theme colors that CSS cannot reach
@@ -313,9 +333,9 @@ yarn next:build
 
 ## Verified on testnet
 
-Live deployment: `PredictionMarkets` at `0x45F344b4ce70B90BDC6e439559e6160B23c5AcED` ([Hashscan](https://hashscan.io/testnet/contract/0x45F344b4ce70B90BDC6e439559e6160B23c5AcED)), source verified on Sourcify (exact match). It checks for a settlement price 4 times after the first scheduled call, 30 minutes apart, and ships with demo markets on HBAR, BTC and ETH, several with SaucerSwap pools.
+Live deployment: `PredictionMarkets` at `0x2528B83f1B73780a226838039376cc1435b5F289` ([Hashscan](https://hashscan.io/testnet/contract/0x2528B83f1B73780a226838039376cc1435b5F289)), source verified on Sourcify (exact match). It checks for a settlement price 4 times after the first scheduled call, 30 minutes apart, and ships with demo markets on HBAR, BTC and ETH, several with SaucerSwap pools.
 
-Market 9 is the latest full run of `yarn foundry:e2e:testnet` (2026-10-03). The HBAR/USD feed was quiet after expiry, so the market booked two retries on its own and the second one settled it:
+Market 9 on the previous deployment `0x45F344b4...AcED` (the same contract before schedule-capacity probing) is the latest completed run of `yarn foundry:e2e:testnet` (2026-10-03). The HBAR/USD feed was quiet after expiry, so the market booked two retries on its own and the second one settled it:
 
 | Time (UTC) | Step | Evidence |
 |---|---|---|
@@ -331,7 +351,6 @@ Market 9 is the latest full run of `yarn foundry:e2e:testnet` (2026-10-03). The 
 | 13:39 | Redeem the YES tokens still held for 4.76384225 HBAR (1.6 HBAR each), no approve step | [transaction](https://hashscan.io/testnet/transaction/0xdea46d2d5b1a1a580e2bfd93bf37cf34cd00873d8671a1be6c6ea29c7575977a) |
 | 13:40 | Creator withdraws what is left of the reserve | [transaction](https://hashscan.io/testnet/transaction/0x634d9078081c2be5980dc6adcc2d2942de374fd7ee54133229a2ae693971dcd0) |
 
-The same history is on the [market 9 page](https://predera.vercel.app/markets/9) (Activity panel) and in JSON at [/api/markets/9](https://predera.vercel.app/api/markets/9).
 
 Earlier deployments, kept as history:
 

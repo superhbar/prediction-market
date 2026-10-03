@@ -1,6 +1,6 @@
 # AGENTS.md: Predera (prediction-market template)
 
-Scaffold-hbar template: oracle-settled binary prediction markets on Hedera. Foundry only, Next.js App Router, RainbowKit/wagmi/viem, DaisyUI. Live testnet deployment at `0x45F344b4ce70B90BDC6e439559e6160B23c5AcED`; frontend bindings ship pointing at it.
+Scaffold-hbar template: oracle-settled binary prediction markets on Hedera. Foundry only, Next.js App Router, RainbowKit/wagmi/viem, DaisyUI. Live testnet deployment at `0x2528B83f1B73780a226838039376cc1435b5F289`; frontend bindings ship pointing at it.
 
 ## Commands
 
@@ -29,7 +29,7 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 - `packages/foundry/scripts-js/deployHedera.js`: `cast send --create` deploy, writes `broadcast/` + `deployments/`, then regenerates bindings.
 - `packages/foundry/scripts-js/e2eTestnet.js`: create, stake both sides, wait for scheduled settle, redeem, withdraw reserve.
 - `packages/foundry/test/`: `PredictionMarkets.t.sol`, `PredictionMarkets.invariant.t.sol` (random multi-market sequences; extend its handler when adding an action), `PriceMath.t.sol`, `HelperConfig.t.sol`, `mocks/` (etched at `0x167`/`0x16b`).
-- `packages/nextjs/app/`: `page.tsx` (list), `markets/new`, `markets/[id]`, `portfolio`, `api/pyth/route.ts` (server-only Hermes proxy), `api/markets` and `llms.txt` (read-only JSON and agent guide; shape in `utils/markets/marketJson.ts`).
+- `packages/nextjs/app/`: `page.tsx` (list), `markets/new`, `markets/[id]`, `portfolio`, `api/pyth/route.ts` (server-only Hermes proxy), `api/markets` and `llms.txt` (read-only JSON and agent guide; shape in `utils/markets/marketJson.ts`), `api/record` (HCS settlement records; format in `utils/markets/record.ts`, SDK calls in `utils/markets/hcs.ts`).
 - `packages/nextjs/components/markets/`: MarketCard, StakePanel, TradePanel (SaucerSwap), RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, `ui.tsx` (AssetBadge, StatusPill, OutcomeBar).
 - `packages/nextjs/styles/globals.css`: both daisyUI themes (`hedera` dark default, `hedera-light`) and `--color-yes`/`--color-no`. `utils/brand.ts`: app name and the hex colors CSS cannot reach.
 - `packages/nextjs/hooks/markets/`: useMarket(s), usePositions, useSaucerPool, useAccountExists, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate, useMarketActivity.
@@ -91,7 +91,8 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 - No owner, no admin, no pauser. Do not add privileged roles.
 - No `delegatecall` to `0x16b`. Scheduled calls are direct CALLs from the contract.
 - No `forge script --broadcast` to Hashio. Use the `cast send` path in `scripts-js/`.
-- No Pyth key (or any secret) in client code or `NEXT_PUBLIC_` vars.
+- No Pyth key, operator key (or any secret) in client code or `NEXT_PUBLIC_` vars. `HEDERA_OPERATOR_KEY` is read only in `utils/markets/hcs.ts`.
+- HCS records are optional: with no `HCS_RECORD_TOPIC_ID` the record panel is hidden and nothing else changes. Record a market only once it is Settled or Voided, and keep readers taking the first record per market by sequence number.
 - No hand edits to `deployedContracts.ts`. Regenerate via deploy.
 - No frontend payout math for redeem amounts. Read `quotePayout`. `projectedPayout` is the single, tested exception.
 - No mainnet deploy without an audit. Mainnet addresses in `HelperConfig` are reference only.

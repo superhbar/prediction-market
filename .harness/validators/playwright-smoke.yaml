@@ -13,7 +13,7 @@ routes:
   - name: markets
     path: /
   - name: market-detail
-    path: /markets/9
+    path: /markets/0
   - name: create
     path: /markets/new
   - name: portfolio
@@ -22,7 +22,7 @@ routes:
   # USD price from CoinGecko itself and logs a console error wherever CoinGecko is unreachable or
   # rate-limited, which is outside this template's code. The route still renders (HTTP 200).
   - name: missing-market
-    path: /markets/999999
+    path: /markets/099999
 forbidden:
   visibleText:
     - Application error
