@@ -5,6 +5,7 @@ import { parseEther } from "viem";
 import { useAccount } from "wagmi";
 import { useFeedInfo } from "~~/hooks/markets/useFeedInfo";
 import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
+import { useNow } from "~~/hooks/markets/useNow";
 import { useScheduleStatus } from "~~/hooks/markets/useScheduleStatus";
 import { useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-hbar";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
@@ -36,12 +37,7 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
   const feedLabel = bytes32ToFeedKey(market.feedKey);
   const { pythId } = useFeedInfo(feedLabel);
   const [pythEnabled, setPythEnabled] = useState(false);
-  const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000));
-
-  useEffect(() => {
-    const timer = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 30_000);
-    return () => clearInterval(timer);
-  }, []);
+  const nowSec = useNow();
 
   useEffect(() => {
     let cancelled = false;
@@ -63,10 +59,10 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
     disableSimulate: true,
   });
 
-  const status = config === undefined ? "awaiting-settlement" : deriveStatus(market, BigInt(nowSec), config);
-  const expired = BigInt(nowSec) >= market.expiry;
+  const status = config === undefined ? "awaiting-settlement" : deriveStatus(market, nowSec, config);
+  const expired = nowSec >= market.expiry;
   // The contract opens the Pyth fallback only after maxRoundLag, and only when Chainlink has no eligible round.
-  const pythWindowOpen = config !== undefined && BigInt(nowSec) >= market.expiry + config.maxRoundLag;
+  const pythWindowOpen = config !== undefined && nowSec >= market.expiry + config.maxRoundLag;
   const isOpen = market.state === MarketState.Open;
   const isSettled = market.state === MarketState.Settled;
   const isVoided = market.state === MarketState.Voided;

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { MutateOptions } from "@tanstack/react-query";
+import { MutateOptions, useQueryClient } from "@tanstack/react-query";
 import { Abi, ExtractAbiFunctionNames } from "abitype";
 import { Config, UseWriteContractParameters, useAccount, useConfig, useWriteContract } from "wagmi";
 import { WriteContractErrorType, WriteContractReturnType } from "wagmi/actions";
 import { WriteContractVariables } from "wagmi/query";
 import { useSelectedNetwork } from "~~/hooks/scaffold-hbar";
 import { useDeployedContractInfo, useTransactor } from "~~/hooks/scaffold-hbar";
+import { refreshMarketReads } from "~~/utils/markets/refresh";
 import { AllowedChainIds, notification } from "~~/utils/scaffold-hbar";
 import {
   ContractAbi,
@@ -62,6 +63,7 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
   const { contractName, chainId, writeContractParams: finalWriteContractParams } = finalConfig;
 
   const wagmiConfig = useConfig();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (typeof configOrName === "string") {
@@ -137,7 +139,14 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
               >
             | undefined,
         );
-      const writeTxResult = await writeTx(makeWriteWithParams, { blockConfirmations, onBlockConfirmation });
+      const writeTxResult = await writeTx(makeWriteWithParams, {
+        blockConfirmations,
+        onBlockConfirmation: receipt => {
+          // Contract reads go stale after a confirmed write; refetch them instead of waiting for the next poll.
+          if (receipt.status === "success") void refreshMarketReads(queryClient);
+          onBlockConfirmation?.(receipt);
+        },
+      });
 
       return writeTxResult;
     } catch (e: any) {

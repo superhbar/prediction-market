@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import { toMarket } from "./abis";
 import { useReadContracts } from "wagmi";
 import { useDeployedContractInfo, useScaffoldReadContract, useTargetNetwork } from "~~/hooks/scaffold-hbar";
+import scaffoldConfig from "~~/scaffold.config";
+import { batchReadError } from "~~/utils/markets/readResults";
 import type { Market } from "~~/utils/markets/types";
 
 /**
@@ -16,6 +18,7 @@ export function useMarkets(): {
   count: number | undefined;
   isLoading: boolean;
   error: Error | null;
+  refetch: () => void;
 } {
   const { targetNetwork } = useTargetNetwork();
   const { data: deployed } = useDeployedContractInfo({ contractName: "PredictionMarkets" });
@@ -23,6 +26,7 @@ export function useMarkets(): {
     data: count,
     isPending: countPending,
     error: countError,
+    refetch: refetchCount,
   } = useScaffoldReadContract({ contractName: "PredictionMarkets", functionName: "marketCount" });
 
   const marketIds = useMemo(() => {
@@ -42,9 +46,14 @@ export function useMarkets(): {
     }));
   }, [deployed, marketIds, targetNetwork.id]);
 
-  const { data: results, error: marketsError } = useReadContracts({
+  const {
+    data: results,
+    error: marketsError,
+    isPending: marketsPending,
+    refetch: refetchMarkets,
+  } = useReadContracts({
     contracts,
-    query: { enabled: contracts.length > 0 },
+    query: { enabled: contracts.length > 0, refetchInterval: scaffoldConfig.pollingInterval },
   });
 
   const markets = useMemo<(Market | null)[]>(() => {
@@ -60,13 +69,24 @@ export function useMarkets(): {
     });
   }, [marketIds, results]);
 
+  // One unreadable market is skipped by the list; only a failure of every read is an error.
+  const allFailed = !!results && results.length > 0 && markets.every(market => market === null);
+  const error =
+    countError ??
+    marketsError ??
+    (allFailed ? (batchReadError(results) ?? new Error("Markets could not be read.")) : null);
+
   return {
     marketIds,
     markets,
     count: count === undefined ? undefined : Number(count),
     // isPending, not isLoading: the count read stays disabled until the contract address resolves, and a
     // disabled query is not "loading", which would flash the empty state before the first fetch.
-    isLoading: (countPending && !countError) || (marketIds.length > 0 && !results && !marketsError),
-    error: ((countError ?? marketsError) as Error | null) ?? null,
+    isLoading: !error && (countPending || (marketIds.length > 0 && marketsPending)),
+    error,
+    refetch: () => {
+      void refetchCount();
+      if (contracts.length > 0) void refetchMarkets();
+    },
   };
 }

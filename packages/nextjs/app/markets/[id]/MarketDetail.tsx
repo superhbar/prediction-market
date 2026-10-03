@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { ActivityPanel } from "~~/components/markets/ActivityPanel";
 import { Countdown } from "~~/components/markets/Countdown";
@@ -14,6 +13,7 @@ import { AssetBadge, StatusPill } from "~~/components/markets/ui";
 import { useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarket } from "~~/hooks/markets/useMarket";
 import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
+import { useNow } from "~~/hooks/markets/useNow";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
 import { deriveStatus, isRefund, resolutionLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
@@ -25,8 +25,8 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
   const { market, invalid, notFound, isLoading, error, refetch } = useMarket(id);
   const { config } = useMarketConfig();
   const feedLabel = market ? bytes32ToFeedKey(market.feedKey) : "HBAR/USD";
-  const { points, isLoading: chartLoading } = useChainlinkHistory(feedLabel);
-  const [nowSec] = useState(() => BigInt(Math.floor(Date.now() / 1000)));
+  const { points, isLoading: chartLoading, error: chartError } = useChainlinkHistory(feedLabel);
+  const nowSec = useNow();
 
   if (isLoading) {
     return (
@@ -87,6 +87,7 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
         </div>
       </div>
 
+      {error && <ErrorState message="The market refresh failed. Showing cached data." onRetry={refetch} />}
       <Resolution market={market} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 mt-6">
@@ -110,6 +111,8 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
           ) : (
             <PriceChart
               points={points}
+              nowSec={nowSec}
+              error={chartError}
               strike={market.strike}
               feedLabel={feedLabel}
               expiry={market.expiry}

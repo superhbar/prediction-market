@@ -3,21 +3,28 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useAccount, useReadContracts } from "wagmi";
-import { EmptyState } from "~~/components/markets/States";
+import { EmptyState, ErrorState } from "~~/components/markets/States";
 import { AssetBadge } from "~~/components/markets/ui";
 import { useMarkets } from "~~/hooks/markets/useMarkets";
 import { usePositions } from "~~/hooks/markets/usePositions";
 import { useDeployedContractInfo, useTargetNetwork } from "~~/hooks/scaffold-hbar";
+import scaffoldConfig from "~~/scaffold.config";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { marketQuestion } from "~~/utils/markets/question";
+import { batchReadError } from "~~/utils/markets/readResults";
 import { formatHbar } from "~~/utils/markets/units";
 
 const PortfolioView = () => {
   const { address: account } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const { data: deployed } = useDeployedContractInfo({ contractName: "PredictionMarkets" });
-  const { positions, isLoading: positionsLoading } = usePositions(account);
-  const { markets, marketIds, isLoading: marketsLoading } = useMarkets();
+  const {
+    positions,
+    isLoading: positionsLoading,
+    error: positionsError,
+    refetch: refetchPositions,
+  } = usePositions(account);
+  const { markets, marketIds, isLoading: marketsLoading, error: marketsError } = useMarkets();
 
   const marketById = useMemo(() => {
     const map = new Map<number, (typeof markets)[number]>();
@@ -45,7 +52,15 @@ const PortfolioView = () => {
     ]);
   }, [deployed, positions, targetNetwork.id]);
 
-  const { data: quotes } = useReadContracts({ contracts, query: { enabled: contracts.length > 0 } });
+  const {
+    data: quotes,
+    isPending: quotesPending,
+    error: quotesError,
+    refetch: refetchQuotes,
+  } = useReadContracts({
+    contracts,
+    query: { enabled: contracts.length > 0, refetchInterval: scaffoldConfig.pollingInterval },
+  });
 
   if (!account) {
     return (
@@ -58,13 +73,23 @@ const PortfolioView = () => {
     );
   }
 
-  const loading = positionsLoading || marketsLoading;
+  const error = positionsError ?? marketsError ?? quotesError ?? batchReadError(quotes);
+  const loading = !error && (positionsLoading || marketsLoading || (positions.length > 0 && quotesPending));
+  const retry = () => {
+    refetchPositions();
+    if (contracts.length > 0) void refetchQuotes();
+  };
 
   return (
     <div className="shell page">
       <h1 className="text-2xl font-bold m-0">Portfolio</h1>
       <div className="mt-6">
-        {loading ? (
+        {error ? (
+          <ErrorState
+            message="Positions or payouts could not be loaded. Check your connection and retry."
+            onRetry={retry}
+          />
+        ) : loading ? (
           <div className="h-32 panel animate-pulse" aria-hidden />
         ) : positions.length === 0 ? (
           <EmptyState
@@ -78,9 +103,11 @@ const PortfolioView = () => {
             {positions.map((position, index) => {
               const market = marketById.get(position.marketId);
               const yesQuote =
-                quotes?.[index * 2]?.status === "success" ? BigInt(quotes[index * 2].result as bigint) : 0n;
+                quotes?.[index * 2]?.status === "success" ? BigInt(quotes[index * 2].result as bigint) : undefined;
               const noQuote =
-                quotes?.[index * 2 + 1]?.status === "success" ? BigInt(quotes[index * 2 + 1].result as bigint) : 0n;
+                quotes?.[index * 2 + 1]?.status === "success"
+                  ? BigInt(quotes[index * 2 + 1].result as bigint)
+                  : undefined;
               return (
                 <Link
                   key={position.marketId}
@@ -101,11 +128,15 @@ const PortfolioView = () => {
                   <div className="grid grid-cols-2 gap-2 mt-4 text-sm">
                     <div className="rounded-xl bg-yes/10 px-3 py-2">
                       <p className="m-0 font-semibold text-yes">YES {formatHbar(position.yesBalance)}</p>
-                      <p className="m-0 text-base-content/60 tabular-nums">Redeemable {formatHbar(yesQuote)}</p>
+                      <p className="m-0 text-base-content/60 tabular-nums">
+                        Redeemable {yesQuote === undefined ? "Unavailable" : formatHbar(yesQuote)}
+                      </p>
                     </div>
                     <div className="rounded-xl bg-no/10 px-3 py-2">
                       <p className="m-0 font-semibold text-no">NO {formatHbar(position.noBalance)}</p>
-                      <p className="m-0 text-base-content/60 tabular-nums">Redeemable {formatHbar(noQuote)}</p>
+                      <p className="m-0 text-base-content/60 tabular-nums">
+                        Redeemable {noQuote === undefined ? "Unavailable" : formatHbar(noQuote)}
+                      </p>
                     </div>
                   </div>
                 </Link>

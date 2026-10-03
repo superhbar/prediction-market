@@ -8,20 +8,38 @@ import { EmptyState, ErrorState, MarketCardSkeleton } from "~~/components/market
 import { type PricePoint, useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
 import { useMarkets } from "~~/hooks/markets/useMarkets";
+import { useNow } from "~~/hooks/markets/useNow";
 import { FEED_KEYS, bytes32ToFeedKey } from "~~/utils/markets/feeds";
+import { priceAge, priceReadState } from "~~/utils/markets/freshness";
 import { marketQuestion } from "~~/utils/markets/question";
 import { type MarketFilter, deriveStatus, matchesFilter } from "~~/utils/markets/status";
 import { formatPrice } from "~~/utils/markets/units";
 
 /** Reads one feed's recent rounds and reports them up, so the page reads each feed once. */
-function FeedReader({ feed, onPoints }: { feed: string; onPoints: (feed: string, points: PricePoint[]) => void }) {
-  const { points } = useChainlinkHistory(feed);
+function FeedReader({
+  feed,
+  onPoints,
+  nowSec,
+}: {
+  feed: string;
+  onPoints: (feed: string, points: PricePoint[]) => void;
+  nowSec: bigint;
+}) {
+  const { points, error } = useChainlinkHistory(feed);
   useEffect(() => onPoints(feed, points), [feed, points, onPoints]);
-  return null;
+  const latest = points.at(-1);
+  const readState = priceReadState(!!latest, error);
+  return (
+    <span>
+      {feed} <span className="font-mono text-base-content">{latest ? formatPrice(latest.normalized) : "..."}</span>{" "}
+      {latest && <span>{priceAge(latest.timestamp, nowSec)}</span>}
+      {readState && <span className="text-warning"> · {readState}</span>}
+    </span>
+  );
 }
 
 const Home = () => {
-  const { marketIds, markets, count, isLoading, error } = useMarkets();
+  const { marketIds, markets, count, isLoading, error, refetch } = useMarkets();
   const { config } = useMarketConfig();
   const [filter, setFilter] = useState<MarketFilter>("all");
   const [asset, setAsset] = useState<string>("all");
@@ -41,7 +59,7 @@ const Home = () => {
     [],
   );
 
-  const [nowSec] = useState(() => BigInt(Math.floor(Date.now() / 1000)));
+  const nowSec = useNow();
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return marketIds.flatMap((id, index) => {
@@ -58,10 +76,6 @@ const Home = () => {
 
   return (
     <div className="shell page">
-      {FEED_KEYS.map(feed => (
-        <FeedReader key={feed} feed={feed} onPoints={onPoints} />
-      ))}
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <h1 className="text-2xl font-bold m-0">Markets</h1>
@@ -77,20 +91,10 @@ const Home = () => {
       </div>
 
       <p className="mt-2 mb-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-base-content/60">
-        <span className="inline-flex items-center gap-1.5 font-semibold text-success">
-          <span className="w-1.5 h-1.5 rounded-full bg-current" aria-hidden />
-          Live
-        </span>
         <span>Chainlink</span>
-        {FEED_KEYS.map(feed => {
-          const latest = history[feed]?.at(-1);
-          return (
-            <span key={feed}>
-              {feed}{" "}
-              <span className="font-mono text-base-content">{latest ? formatPrice(latest.normalized) : "..."}</span>
-            </span>
-          );
-        })}
+        {FEED_KEYS.map(feed => (
+          <FeedReader key={feed} feed={feed} onPoints={onPoints} nowSec={nowSec} />
+        ))}
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -142,17 +146,14 @@ const Home = () => {
       </div>
 
       <div className="mt-5">
-        {isLoading && count === undefined ? (
+        {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <MarketCardSkeleton />
             <MarketCardSkeleton />
             <MarketCardSkeleton />
           </div>
         ) : error ? (
-          <ErrorState
-            message="Markets could not be loaded. Check your connection and retry."
-            onRetry={() => window.location.reload()}
-          />
+          <ErrorState message="Markets could not be loaded. Check your connection and retry." onRetry={refetch} />
         ) : count === 0 ? (
           <EmptyState
             title="No markets yet"

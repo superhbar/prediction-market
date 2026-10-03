@@ -1,9 +1,12 @@
 import type { PricePoint } from "~~/hooks/markets/useChainlinkHistory";
+import { priceAge, priceReadState } from "~~/utils/markets/freshness";
 import { shortExpiry } from "~~/utils/markets/question";
 import { formatExactPrice, formatPrice } from "~~/utils/markets/units";
 
 type PriceChartProps = {
   points: PricePoint[];
+  nowSec: bigint;
+  error: string | null;
   strike: bigint;
   feedLabel: string;
   /** Market expiry: the first round at or after it is the settlement round and gets a marker. */
@@ -17,7 +20,7 @@ const HEIGHT = 240;
 const PAD = 12;
 
 /** Inline SVG line chart from Chainlink rounds with a dashed strike line. No chart library. */
-export function PriceChart({ points, strike, feedLabel, expiry, expired }: PriceChartProps) {
+export function PriceChart({ points, strike, feedLabel, expiry, expired, nowSec, error }: PriceChartProps) {
   if (points.length === 0) {
     return (
       <div className="panel p-5">
@@ -62,6 +65,10 @@ export function PriceChart({ points, strike, feedLabel, expiry, expired }: Price
         <p className="text-sm font-semibold text-base-content/70 m-0">{feedLabel} &middot; Chainlink</p>
         <p className="m-0 text-2xl font-bold tabular-nums">{formatPrice(last.normalized)}</p>
       </div>
+      <p className="text-xs text-base-content/60 mt-0 mb-3">
+        {priceAge(last.timestamp, nowSec)}
+        {error && <span className="text-warning"> · {priceReadState(true, error)}</span>}
+      </p>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         className="w-full h-auto"

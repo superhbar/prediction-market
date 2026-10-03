@@ -6,6 +6,8 @@ import { useMarkets } from "./useMarkets";
 import type { Address } from "viem";
 import { useReadContracts } from "wagmi";
 import { useTargetNetwork } from "~~/hooks/scaffold-hbar";
+import scaffoldConfig from "~~/scaffold.config";
+import { batchReadError } from "~~/utils/markets/readResults";
 
 export type Position = {
   marketId: number;
@@ -20,9 +22,11 @@ export type Position = {
 export function usePositions(account: Address | undefined): {
   positions: Position[];
   isLoading: boolean;
+  error: Error | null;
+  refetch: () => void;
 } {
   const { targetNetwork } = useTargetNetwork();
-  const { marketIds, markets } = useMarkets();
+  const { marketIds, markets, isLoading: marketsLoading, error: marketsError, refetch: refetchMarkets } = useMarkets();
 
   // Only markets that loaded get balance reads, so results are paired with this list, never with
   // marketIds by position: a failed market read would otherwise shift every later market's balances.
@@ -48,9 +52,14 @@ export function usePositions(account: Address | undefined): {
     );
   }, [account, loaded, targetNetwork.id]);
 
-  const { data: results, isLoading } = useReadContracts({
+  const {
+    data: results,
+    isPending,
+    error: balancesError,
+    refetch: refetchBalances,
+  } = useReadContracts({
     contracts,
-    query: { enabled: contracts.length > 0 },
+    query: { enabled: contracts.length > 0, refetchInterval: scaffoldConfig.pollingInterval },
   });
 
   const positions = useMemo<Position[]>(() => {
@@ -58,12 +67,23 @@ export function usePositions(account: Address | undefined): {
     return loaded.flatMap(({ id }, index) => {
       const yes = results[index * 2];
       const no = results[index * 2 + 1];
-      const yesBalance = yes?.status === "success" && yes.result !== undefined ? BigInt(yes.result as bigint) : 0n;
-      const noBalance = no?.status === "success" && no.result !== undefined ? BigInt(no.result as bigint) : 0n;
+      if (yes?.status !== "success" || no?.status !== "success" || yes.result === undefined || no.result === undefined)
+        return [];
+      const yesBalance = BigInt(yes.result as bigint);
+      const noBalance = BigInt(no.result as bigint);
       if (yesBalance === 0n && noBalance === 0n) return [];
       return [{ marketId: id, yesBalance, noBalance }];
     });
   }, [account, results, loaded]);
 
-  return { positions, isLoading: isLoading && contracts.length > 0 };
+  const error = account ? (marketsError ?? balancesError ?? batchReadError(results)) : null;
+  return {
+    positions,
+    isLoading: !!account && !error && (marketsLoading || (loaded.length > 0 && isPending)),
+    error,
+    refetch: () => {
+      refetchMarkets();
+      if (contracts.length > 0) void refetchBalances();
+    },
+  };
 }
