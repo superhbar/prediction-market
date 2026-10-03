@@ -9,10 +9,11 @@ import { batchReadError } from "~~/utils/markets/readResults";
 import type { Market } from "~~/utils/markets/types";
 
 /**
- * Reads marketCount then every getMarket in one batched call, newest first.
- * Renders safely without a wallet.
+ * Reads marketCount then getMarket for the newest markets in one batched call, newest first.
+ * `limit` bounds how many markets are read and polled; omit it to read every market (the portfolio
+ * needs all of them to find positions). Renders safely without a wallet.
  */
-export function useMarkets(): {
+export function useMarkets(limit?: number): {
   marketIds: number[];
   markets: (Market | null)[];
   count: number | undefined;
@@ -32,8 +33,9 @@ export function useMarkets(): {
   const marketIds = useMemo(() => {
     if (count === undefined) return [];
     const total = Number(count);
-    return Array.from({ length: total }, (_, index) => total - 1 - index);
-  }, [count]);
+    const shown = limit === undefined ? total : Math.min(total, limit);
+    return Array.from({ length: shown }, (_, index) => total - 1 - index);
+  }, [count, limit]);
 
   const contracts = useMemo(() => {
     if (!deployed || marketIds.length === 0) return [];

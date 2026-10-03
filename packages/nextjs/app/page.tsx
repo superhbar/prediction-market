@@ -39,8 +39,12 @@ function FeedReader({
   );
 }
 
+/** Markets read per page; "Show more" reads the next page instead of polling every market ever created. */
+const PAGE_SIZE = 24;
+
 const Home = () => {
-  const { marketIds, markets, count, isLoading, error, refetch } = useMarkets();
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const { marketIds, markets, count, isLoading, error, refetch } = useMarkets(limit);
   const { config } = useMarketConfig();
   const [filter, setFilter] = useState<MarketFilter>("all");
   const [asset, setAsset] = useState<string>("all");
@@ -192,6 +196,16 @@ const Home = () => {
                 points={history[entry.feed]}
               />
             ))}
+          </div>
+        )}
+        {count !== undefined && count > marketIds.length && !error && (
+          <div className="mt-6 flex flex-col items-center gap-2">
+            <button className="btn btn-sm h-9 px-5" onClick={() => setLimit(current => current + PAGE_SIZE)}>
+              Show older markets
+            </button>
+            <p className="m-0 text-xs text-base-content/50">
+              Showing the newest {marketIds.length} of {count}. Filters and search apply to the markets shown.
+            </p>
           </div>
         )}
       </div>
