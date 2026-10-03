@@ -1,14 +1,14 @@
 {
-  "name": "market-activity-yarn",
+  "name": "market-activity-commands",
   "description": "Commands that must pass after every attempt. None of them needs a key or testnet HBAR.",
   "requiresNoSecrets": true,
-  "forbiddenCommands": ["npm install", "npm run", "pnpm install", "pnpm run"],
   "commands": [
-    { "name": "install", "command": "yarn install", "timeoutMs": 600000, "purpose": "Install workspace dependencies." },
-    { "name": "lint", "command": "yarn lint", "timeoutMs": 300000, "purpose": "ESLint for Next.js and forge fmt --check for Solidity." },
-    { "name": "types", "command": "yarn next:check-types", "timeoutMs": 300000, "purpose": "TypeScript, no emit." },
-    { "name": "unit", "command": "yarn next:test", "timeoutMs": 300000, "purpose": "Vitest unit tests, including the new activity decoder." },
-    { "name": "contracts", "command": "yarn foundry:test", "timeoutMs": 600000, "purpose": "Forge unit tests; the feature must not touch contract behaviour." },
-    { "name": "build", "command": "yarn next:build", "timeoutMs": 600000, "purpose": "Production build." }
+    { "name": "install", "command": "node .harness/validators/command.cjs install", "timeoutMs": 600000, "purpose": "Install workspace dependencies." },
+    { "name": "lint", "command": "node .harness/validators/command.cjs lint", "timeoutMs": 300000, "purpose": "ESLint for Next.js and forge fmt --check for Solidity." },
+    { "name": "types", "command": "node .harness/validators/command.cjs next:check-types", "timeoutMs": 300000, "purpose": "TypeScript, no emit." },
+    { "name": "unit", "command": "node .harness/validators/command.cjs next:test", "timeoutMs": 300000, "purpose": "Vitest unit tests, including the new activity decoder." },
+    { "name": "contracts", "command": "node .harness/validators/command.cjs foundry:test", "timeoutMs": 600000, "purpose": "Forge unit tests; the feature must not touch contract behaviour." },
+    { "name": "build", "command": "node .harness/validators/command.cjs next:build", "timeoutMs": 600000, "purpose": "Production build." },
+    { "name": "loaded-content", "command": "node .harness/validators/loaded-smoke.cjs", "timeoutMs": 300000, "purpose": "Wait for a loaded market card, market 0 resolution and eight activity links with no browser errors." }
   ]
 }

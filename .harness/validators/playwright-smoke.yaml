@@ -1,7 +1,9 @@
+# Harness 1.2.2 has no required-content assertion keys. The command validator
+# also runs loaded-smoke.cjs against this server config to assert loaded data.
 name: market-activity-smoke
 server:
-  command: yarn next:dev
-  url: http://localhost:3000
+  command: node .harness/validators/command.cjs next:dev
+  url: http://localhost:20960
   timeoutMs: 180000
 defaults:
   timeoutMs: 60000

@@ -14,12 +14,12 @@ prd: .harness/prds/01-market-activity.md
 baseline:
   commands:
     - name: install
-      command: yarn install
+      command: node .harness/validators/command.cjs install
     - name: contracts
-      command: yarn foundry:test
+      command: node .harness/validators/command.cjs foundry:test
       timeoutMs: 600000
     - name: build
-      command: yarn next:build
+      command: node .harness/validators/command.cjs next:build
 
 # The foundry workspace's postinstall copies .env.example to packages/foundry/.env (gitignored,
 # placeholder values only), so the default per-workspace .env check would fail every fresh install.
