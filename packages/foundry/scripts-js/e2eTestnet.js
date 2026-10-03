@@ -1,14 +1,22 @@
 /**
  * End-to-end run of the full market lifecycle on Hedera testnet:
- * create -> stake YES and NO -> HIP-1215 scheduled settlement -> redeem the winner -> withdraw the reserve.
+ * create -> stake YES and NO -> HIP-1215 scheduled settlement -> redeem -> withdraw the reserve.
  *
  * Transactions are signed in-process with ethers, so the key never appears in a command line (see
  * deployHedera.js for why `forge script` is not used). The mirror node confirms that the settlement came
- * from the scheduled transaction. Every step prints a Hashscan link. A run takes about 17 minutes: a
- * 6 minute market plus the 10 minute settlement delay, longer when the first scheduled call has to retry.
+ * from the scheduled transaction. Every step prints a Hashscan link.
+ *
+ * A run takes about 17 minutes when Chainlink publishes a round soon after expiry: a 6 minute market plus
+ * the 10 minute settlement delay. Testnet feeds only publish on deviation or heartbeat, so a quiet feed can
+ * leave no round for an hour or more. The script then follows the same fallbacks a user has:
+ *   1. wait for the scheduled call and its self-booked retries;
+ *   2. call `settle` itself as soon as a round at or after expiry exists, until expiry + maxRoundLag;
+ *   3. with PYTH_API_KEY set, settle with the first Pyth price at or after expiry;
+ *   4. once expiry + gracePeriod has passed, void the market so every stake refunds 1:1.
+ * If none applies yet, it prints when the market can be voided. Rerun with `--market <id>` to resume.
  *
  * Usage:
- *   DEPLOYER_PRIVATE_KEY=0x... node scripts-js/e2eTestnet.js [--address 0x...] [--strike 0.10]
+ *   DEPLOYER_PRIVATE_KEY=0x... node scripts-js/e2eTestnet.js [--address 0x...] [--strike 0.10] [--market <id>]
  * The account needs about 45 testnet HBAR (two HTS token creations, a 7 HBAR reserve and two stakes).
  */
 import { ethers } from "ethers";
@@ -23,6 +31,9 @@ const HASHSCAN = "https://hashscan.io/testnet";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUTCOMES = ["Unresolved", "Yes", "No", "Invalid"];
 const SOURCES = ["None", "Chainlink", "Pyth"];
+const STATES = { Open: 0, Settled: 1, Voided: 2 };
+const OUTCOME_INVALID = 3;
+const HERMES = process.env.PYTH_HERMES_URL ?? "https://hermes.pyth.network";
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`);
@@ -86,22 +97,12 @@ async function send(contract, method, args, { value, gas }) {
   return receipt;
 }
 
-async function main() {
-  const key = process.env.DEPLOYER_PRIVATE_KEY;
-  if (!key)
-    throw new Error("Set DEPLOYER_PRIVATE_KEY to a funded testnet ECDSA key");
-  const provider = new ethers.providers.JsonRpcProvider(RPC, CHAIN_ID);
-  const pm = new ethers.Contract(
-    marketAddress(),
-    abi(),
-    new ethers.Wallet(key, provider),
-  );
-
+/** Creates a market expiring in six minutes and stakes 5 HBAR on YES and 3 HBAR on NO. */
+async function createAndStake(pm) {
   const strike = ethers.utils.parseUnits(arg("strike", "0.10"), 18);
   const expiry = Math.floor(Date.now() / 1000) + 360;
   const feedKey = ethers.utils.formatBytes32String("HBAR/USD");
 
-  step("contract", `${HASHSCAN}/contract/${pm.address}`);
   const createReceipt = await send(
     pm,
     "createMarket",
@@ -142,47 +143,232 @@ async function main() {
     gas: 1_500_000,
   });
   step("stake NO 3 HBAR", `${HASHSCAN}/transaction/${noStake.transactionHash}`);
+  return id;
+}
 
-  const settleBy = expiry + 600 + 3 * 900 + 120;
-  console.log(
-    `waiting for the scheduled settlement (expiry ${new Date(expiry * 1000).toISOString()})...`,
-  );
+const now = () => Math.floor(Date.now() / 1000);
+const iso = (sec) => new Date(sec * 1000).toISOString();
+
+/** Polls getMarket until the market leaves Open or `deadline` (unix seconds) passes. */
+async function waitWhileOpen(pm, id, deadline, intervalMs = 20_000) {
   let market = await pm.getMarket(id);
-  while (market.state === 0 && Date.now() / 1000 < settleBy) {
-    await sleep(20_000);
+  while (market.state === STATES.Open && now() < deadline) {
+    await sleep(intervalMs);
     market = await pm.getMarket(id);
   }
-  if (market.state !== 1)
-    throw new Error(
-      `market #${id} did not settle by ${new Date(settleBy * 1000).toISOString()}`,
-    );
+  return market;
+}
 
-  const schedule = await mirror(`/schedules/${entityId(market.schedule)}`);
-  if (!schedule.executed_timestamp)
-    throw new Error(
-      "settled, but the mirror node shows the schedule as not executed",
-    );
-  step(
-    "scheduled settle",
-    `executed at ${schedule.executed_timestamp} ${HASHSCAN}/schedule/${entityId(market.schedule)}`,
+/** Fetches signed Pyth update data for the first price at or after `publishTime` from Hermes. */
+async function pythUpdateData(pythId, publishTime) {
+  const response = await fetch(
+    `${HERMES}/v2/updates/price/${publishTime}?ids[]=${pythId}&encoding=hex`,
+    { headers: { Authorization: `Bearer ${process.env.PYTH_API_KEY}` } },
   );
-  step(
-    "outcome",
-    `${OUTCOMES[market.outcome]} via ${SOURCES[market.source]} at $${ethers.utils.formatUnits(market.settlementPrice, 18)}, ` +
-      `round ${market.settlementTime.toNumber() - market.expiry.toNumber()}s after expiry`,
-  );
+  if (!response.ok) throw new Error(`Hermes -> HTTP ${response.status}`);
+  const data = (await response.json()).binary?.data ?? [];
+  return data.map((hex) => (hex.startsWith("0x") ? hex : `0x${hex}`));
+}
 
-  const winnerYes = market.outcome === 1;
-  const amount = winnerYes ? 500_000_000 : 300_000_000;
-  const redeem = await send(pm, "redeem", [id, winnerYes, amount], {
-    gas: 800_000,
-  });
-  step("redeem winner", `${HASHSCAN}/transaction/${redeem.transactionHash}`);
-  const withdraw = await send(pm, "withdrawReserve", [id], { gas: 300_000 });
-  step(
-    "withdraw reserve",
-    `${HASHSCAN}/transaction/${withdraw.transactionHash}`,
+/**
+ * Drives market `id` to Settled or Voided through every path the contract offers, in order.
+ * Returns the final market, or undefined when nothing can settle it yet.
+ */
+async function settleMarket(pm, id) {
+  const [settlementDelay, retryDelay, maxRetries, maxRoundLag, gracePeriod] =
+    await Promise.all([
+      pm.settlementDelay(),
+      pm.retryDelay(),
+      pm.maxRetries(),
+      pm.maxRoundLag(),
+      pm.gracePeriod(),
+    ]);
+  let market = await pm.getMarket(id);
+  const expiry = market.expiry.toNumber();
+
+  // 1. The scheduled call and its self-booked retries.
+  const scheduledBy =
+    expiry + Number(settlementDelay) + maxRetries * Number(retryDelay) + 120;
+  if (market.state === STATES.Open && now() < scheduledBy) {
+    console.log(
+      `waiting for the scheduled settlement (expiry ${iso(expiry)}, last retry by ${iso(scheduledBy)})...`,
+    );
+    market = await waitWhileOpen(pm, id, scheduledBy);
+    if (market.state === STATES.Settled) {
+      const schedule = await mirror(`/schedules/${entityId(market.schedule)}`);
+      // Anyone may call settle once a round exists, so a pending schedule means someone else settled it.
+      step(
+        schedule.executed_timestamp
+          ? "scheduled settle"
+          : "settled by a caller",
+        schedule.executed_timestamp
+          ? `executed at ${schedule.executed_timestamp} ${HASHSCAN}/schedule/${entityId(market.schedule)}`
+          : `before the pending schedule ${HASHSCAN}/schedule/${entityId(market.schedule)} ran`,
+      );
+      return market;
+    }
+  }
+
+  // 2. A manual settle once Chainlink has a provably first round. The contract bounds when that round
+  // was published (expiry + maxRoundLag), not when settle is called, so a late resume still tries once.
+  const lagEnds = expiry + Number(maxRoundLag);
+  if (market.state === STATES.Open) {
+    if (now() < lagEnds)
+      console.log(
+        `no Chainlink round after expiry yet; trying settle() every minute until ${iso(lagEnds)}...`,
+      );
+    for (;;) {
+      const ready = await pm.callStatic
+        .settle(id, { gasLimit: 1_000_000 })
+        .then(() => true)
+        .catch(() => false);
+      if (ready) {
+        const receipt = await send(pm, "settle", [id], { gas: 1_000_000 });
+        step(
+          "manual settle",
+          `${HASHSCAN}/transaction/${receipt.transactionHash}`,
+        );
+        return pm.getMarket(id);
+      }
+      if (now() >= lagEnds) break;
+      await sleep(60_000);
+    }
+    market = await pm.getMarket(id);
+  }
+
+  // 3. The Pyth fallback, when a Hermes key is available.
+  if (
+    market.state === STATES.Open &&
+    now() >= lagEnds &&
+    process.env.PYTH_API_KEY
+  ) {
+    try {
+      const { pythId } = await pm.feeds(market.feedKey);
+      const updateData = await pythUpdateData(pythId, expiry);
+      // 1 HBAR covers the Pyth update fee; the contract refunds the rest.
+      const receipt = await send(pm, "settleWithPyth", [id, updateData], {
+        value: "1",
+        gas: 1_000_000,
+      });
+      step(
+        "settle with Pyth",
+        `${HASHSCAN}/transaction/${receipt.transactionHash}`,
+      );
+      return pm.getMarket(id);
+    } catch (error) {
+      // A Hermes outage must not block the void path below.
+      console.log(`Pyth fallback failed: ${error.message}`);
+      market = await pm.getMarket(id);
+    }
+  }
+
+  // 4. Void after the grace period, so every stake refunds 1:1.
+  const voidAt = expiry + Number(gracePeriod);
+  if (market.state === STATES.Open && now() >= voidAt) {
+    const receipt = await send(pm, "voidMarket", [id], { gas: 300_000 });
+    step("void market", `${HASHSCAN}/transaction/${receipt.transactionHash}`);
+    return pm.getMarket(id);
+  }
+  if (market.state === STATES.Open) {
+    console.log(
+      `market #${id} has no oracle price yet. Void opens at ${iso(voidAt)}: rerun with --market ${id} after that.`,
+    );
+    return undefined;
+  }
+  return market;
+}
+
+/** Redeems every position token the signer holds in market `id`. */
+async function redeemAll(pm, id, market) {
+  const owner = await pm.signer.getAddress();
+  let redeemed = 0;
+  const sides = [
+    [true, market.yesToken],
+    [false, market.noToken],
+  ];
+  for (const [yes, token] of sides) {
+    // HTS tokens expose an ERC-20 facade, so balanceOf works on the token address.
+    const balance = await new ethers.Contract(
+      token,
+      ["function balanceOf(address) view returns (uint256)"],
+      pm.provider,
+    ).balanceOf(owner);
+    if (balance.isZero()) continue;
+    const quote = await pm.quotePayout(id, yes, balance);
+    if (quote.isZero()) continue;
+    redeemed += 1;
+    const receipt = await send(pm, "redeem", [id, yes, balance], {
+      gas: 800_000,
+    });
+    step(
+      `redeem ${yes ? "YES" : "NO"}`,
+      `${ethers.utils.formatUnits(quote, 8)} HBAR ${HASHSCAN}/transaction/${receipt.transactionHash}`,
+    );
+  }
+  return redeemed;
+}
+
+async function main() {
+  const key = process.env.DEPLOYER_PRIVATE_KEY;
+  if (!key)
+    throw new Error("Set DEPLOYER_PRIVATE_KEY to a funded testnet ECDSA key");
+  const provider = new ethers.providers.JsonRpcProvider(RPC, CHAIN_ID);
+  const pm = new ethers.Contract(
+    marketAddress(),
+    abi(),
+    new ethers.Wallet(key, provider),
   );
+  step("contract", `${HASHSCAN}/contract/${pm.address}`);
+
+  const resume = arg("market");
+  const id =
+    resume === undefined
+      ? await createAndStake(pm)
+      : ethers.BigNumber.from(resume);
+  if (resume !== undefined) step("resume market", `#${id}`);
+
+  const market = await settleMarket(pm, id);
+  if (!market) process.exit(2);
+  if (market.state === STATES.Voided) {
+    step("outcome", "Voided: every position refunds 1:1");
+  } else {
+    step(
+      "outcome",
+      `${OUTCOMES[market.outcome]} via ${SOURCES[market.source]} at $${ethers.utils.formatUnits(market.settlementPrice, 18)}` +
+        (market.outcome === OUTCOME_INVALID
+          ? ""
+          : `, round ${market.settlementTime.toNumber() - market.expiry.toNumber()}s after expiry`),
+    );
+  }
+
+  if ((await redeemAll(pm, id, market)) === 0)
+    throw new Error(
+      `the signer holds no redeemable position tokens in market #${id}`,
+    );
+  // The contract keeps one execution cost back while a scheduled call is still pending.
+  const holdback = market.schedulePending
+    ? await pm.SCHEDULED_EXECUTION_COST()
+    : ethers.constants.Zero;
+  const isCreator =
+    market.creator.toLowerCase() ===
+    (await pm.signer.getAddress()).toLowerCase();
+  // withdrawReserve also needs balance surplus beyond every other liability; probe before sending.
+  const withdrawable =
+    isCreator &&
+    market.reserve.gt(holdback) &&
+    (await pm.callStatic
+      .withdrawReserve(id, { gasLimit: 300_000 })
+      .then(() => true)
+      .catch(() => false));
+  if (isCreator && !withdrawable)
+    console.log("reserve: nothing withdrawable right now");
+  if (withdrawable) {
+    const withdraw = await send(pm, "withdrawReserve", [id], { gas: 300_000 });
+    step(
+      "withdraw reserve",
+      `${HASHSCAN}/transaction/${withdraw.transactionHash}`,
+    );
+  }
   console.log("E2E PASS");
 }
 

@@ -10,8 +10,8 @@ yarn next:start            # dev server on http://localhost:3000 (also yarn next
 yarn foundry:account:generate
 yarn foundry:account:import
 yarn foundry:deploy --network hedera_testnet --keystore <name>
-DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet   # full lifecycle on testnet, ~17 min
-yarn foundry:test          # 88 forge unit tests, HTS/HSS mocked
+DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet   # full lifecycle on testnet, 17 min to 2 h; --market <id> resumes
+yarn foundry:test          # 89 forge unit tests, HTS/HSS mocked
 yarn next:test             # vitest: units, feeds, status, hashscan, activity, HBAR price
 yarn next:lint && yarn next:check-types && yarn next:build
 yarn lint                  # next:lint + foundry:lint
@@ -77,7 +77,7 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 
 ## How to verify a change
 
-1. `yarn foundry:test` (expect 88 passing, 100 percent line coverage).
+1. `yarn foundry:test` (expect 89 passing, 100 percent line coverage).
 2. `yarn next:lint`, `yarn next:check-types`, `yarn next:test`, `yarn next:build`.
 3. Touching settlement, scheduling, units, or reserve accounting: run `DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet` on testnet.
 4. Touching `.harness/` behavior: `yarn harness:validate` (Tiers 0 to 2).

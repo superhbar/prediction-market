@@ -17,7 +17,7 @@ More screenshots: [an open market with the payout preview](docs/screenshots/mark
 - Chainlink push settlement plus Pyth pull fallback: settlement uses the first oracle price at or after expiry, never a cherry-picked price.
 - HTS position tokens: one fungible token per side per market (8 decimals), minted 1:1 per staked tinybar, redeemed by wipe (no approve step).
 - Frontend pages: market list with filters, create form with live Chainlink strike default, market detail (pools, odds, countdowns, stake, settle, void, redeem), portfolio, and the scaffold Debug Contracts page.
-- Tests: 88 Foundry unit tests with mocked HTS and Schedule Service (100% line coverage, mutation-checked), plus 44 vitest tests for units, feeds, status, activity decoding and Hashscan helpers.
+- Tests: 89 Foundry unit tests with mocked HTS and Schedule Service (100% line coverage, mutation-checked), plus 45 vitest tests for units, feeds, status, activity decoding and Hashscan helpers.
 - E2E script: full lifecycle on real testnet (create, stake both sides, scheduled settle, redeem, reserve withdraw) that prints Hashscan links.
 - Harness recipe: `.harness/` holds a spec, PRDs, and validators so Hedera Harness can build features against the same gate.
 
@@ -58,13 +58,13 @@ yarn foundry:deploy --network hedera_testnet --keystore <name>
 
 Hedera deploys go through `packages/foundry/scripts-js/deployHedera.js` (`cast send --create`), because Foundry 1.8 `forge script` sends `eth_getTransactionCount` with an EIP-1898 block object that the Hashio relay rejects ("Invalid parameter 1"). The script writes the same `broadcast/` and `deployments/` records a forge broadcast would, then `generateTsAbis` regenerates `packages/nextjs/contracts/deployedContracts.ts`. Never edit that file by hand.
 
-Then run the full lifecycle check on testnet (about 17 minutes, needs about 45 testnet HBAR):
+Then run the full lifecycle check on testnet (needs about 45 testnet HBAR):
 
 ```bash
 DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet
 ```
 
-The script creates a short market, stakes both sides, waits for the scheduled settlement, redeems the winner, withdraws the reserve, and prints a Hashscan link for every step.
+The script creates a six-minute market, stakes both sides, waits for the scheduled settlement, redeems, withdraws the reserve, and prints a Hashscan link for every step. It takes about 17 minutes when Chainlink publishes a round soon after expiry. Testnet feeds publish only on deviation or heartbeat, so a quiet feed can leave no round for hours. The script then walks the same fallbacks a user has: it waits out the self-booked retries, calls `settle` itself as soon as a round exists (until expiry + 2 hours), settles with Pyth when `PYTH_API_KEY` is set, and voids the market once the 24 hour grace period has passed. When none applies yet it prints the void time; resume with `yarn foundry:e2e:testnet --market <id>`.
 
 ## Environment variables
 
@@ -202,7 +202,7 @@ yarn foundry:test
 yarn next:test
 ```
 
-`yarn foundry:test` runs 88 unit tests. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent. `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
+`yarn foundry:test` runs 89 unit tests. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent. `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
 
 `yarn next:test` runs vitest for units (including the pre-stake payout preview), feeds, status, Hashscan helpers and the HBAR price conversion. Redeem amounts come from the contract's own `quotePayout`.
 

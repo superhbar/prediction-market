@@ -7,9 +7,9 @@ The full guide (quick start, deploy, environment variables, architecture, troubl
 ## Commands (run from the repo root)
 
 ```bash
-yarn foundry:test          # 88 forge unit tests, HTS/HSS mocked
+yarn foundry:test          # 89 forge unit tests, HTS/HSS mocked
 yarn foundry:deploy --network hedera_testnet --keystore <name>
-DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet   # full lifecycle on testnet, ~17 min
+DEPLOYER_PRIVATE_KEY=0x... yarn foundry:e2e:testnet   # full lifecycle on testnet, 17 min to 2 h; --market <id> resumes
 ```
 
 Inside this package the same entry points are unprefixed (`yarn test`, `yarn deploy`, `yarn e2e:testnet`).

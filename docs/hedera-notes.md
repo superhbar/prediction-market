@@ -40,10 +40,11 @@ something looks different.
 
 | Question | Measured |
 |---|---|
-| Chainlink HBAR/USD update frequency on testnet | Rounds were 3 to 46 minutes apart. The latest price at expiry can be known well before expiry, so settlement uses the first round at or after expiry, never the latest round. |
+| Chainlink HBAR/USD update frequency on testnet | Rounds were 3 to 46 minutes apart on 2026-10-02, but on 2026-10-03 the feed published nothing from 03:09 UTC until well past 06:00 UTC: it updates on deviation or heartbeat, not on a clock. The latest price at expiry can be known well before expiry, so settlement uses the first round at or after expiry, never the latest round, and a quiet feed sends a market down the fallback paths. |
 | Round walk-back | `getRoundData` walks back cleanly within a phase. The contract rejects rounds more than 2 hours after expiry (`maxRoundLag`). |
 | First scheduled settlement vs. round timing | In the end-to-end run the first scheduled settlement (expiry + 10 minutes) found no round yet, booked a retry 15 minutes later, and the retry settled on a round published 604 seconds after expiry. |
 | Pyth Hermes | Every public Hermes endpoint returns 401 without an API key (since 2026-08-26). The Pyth fallback is therefore optional and server-side: `PYTH_API_KEY` lives only in the Next.js route `app/api/pyth`. |
+| Chainlink precedence over Pyth | `settleWithPyth` opens only at expiry + 2 hours (`maxRoundLag`), when no later Chainlink round can still qualify, and reverts with `ChainlinkRoundAvailable` if a provably first Chainlink round exists in that window. Nobody can pick whichever oracle favours their side. |
 
 ## Tooling
 
