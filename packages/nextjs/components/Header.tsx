@@ -95,7 +95,7 @@ export const Header = () => {
           </details>
           <Link href="/" className="flex items-center gap-2.5 shrink-0">
             <LogoMark />
-            <span className="text-[17px] font-bold">{BRAND.name}</span>
+            <span className="hidden sm:inline text-[17px] font-bold">{BRAND.name}</span>
           </Link>
         </div>
         <nav aria-label="Main">

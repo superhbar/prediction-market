@@ -56,11 +56,6 @@ const Home = () => {
     });
   }, [marketIds, markets, config, nowSec, filter, asset, query]);
 
-  const chip = (active: boolean) =>
-    `rounded-lg px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-      active ? "bg-base-100 text-base-content" : "text-base-content/60 hover:text-base-content"
-    }`;
-
   return (
     <div className="shell page">
       {FEED_KEYS.map(feed => (
@@ -99,19 +94,6 @@ const Home = () => {
       </p>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        <div role="tablist" aria-label="Status" className="flex rounded-[10px] border border-base-300 p-0.5">
-          {FILTERS.map(entry => (
-            <button
-              key={entry.value}
-              role="tab"
-              aria-selected={filter === entry.value}
-              onClick={() => setFilter(entry.value)}
-              className={chip(filter === entry.value)}
-            >
-              {entry.label}
-            </button>
-          ))}
-        </div>
         <div role="tablist" aria-label="Asset" className="flex gap-1">
           {["all", ...FEED_KEYS].map(feed => (
             <button
@@ -125,11 +107,11 @@ const Home = () => {
                   : "border-base-300 text-base-content/60 hover:text-base-content"
               }`}
             >
-              {feed === "all" ? "All" : feed.split("/")[0]}
+              {feed === "all" ? "All assets" : feed.split("/")[0]}
             </button>
           ))}
         </div>
-        <label className="ml-auto flex w-full sm:w-64 items-center gap-2 rounded-[10px] border border-base-300 px-3 h-9 focus-within:border-primary">
+        <label className="ml-auto flex w-full sm:w-72 items-center gap-2 rounded-[10px] border border-base-300 px-3 h-9 focus-within:border-primary">
           <MagnifyingGlassIcon className="w-4 h-4 text-base-content/50" aria-hidden />
           <input
             value={query}
@@ -139,6 +121,24 @@ const Home = () => {
             className="w-full bg-transparent text-sm outline-none placeholder:text-base-content/40"
           />
         </label>
+      </div>
+
+      <div role="tablist" aria-label="Status" className="mt-4 flex gap-5 overflow-x-auto border-b border-base-300">
+        {FILTERS.map(entry => (
+          <button
+            key={entry.value}
+            role="tab"
+            aria-selected={filter === entry.value}
+            onClick={() => setFilter(entry.value)}
+            className={`-mb-px whitespace-nowrap border-b-2 pb-2.5 text-sm font-semibold transition-colors ${
+              filter === entry.value
+                ? "border-primary text-base-content"
+                : "border-transparent text-base-content/55 hover:text-base-content"
+            }`}
+          >
+            {entry.label}
+          </button>
+        ))}
       </div>
 
       <div className="mt-5">
