@@ -26,7 +26,7 @@
       },
       {
         "key": "NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID",
-        "description": "packages/nextjs/.env.local: WalletConnect project id for RainbowKit (a shared default is built in for local testing)."
+        "description": "packages/nextjs/.env.local: WalletConnect project id for RainbowKit. Without it the app offers MetaMask and the burner wallet only."
       },
       {
         "key": "PYTH_API_KEY",
