@@ -21,6 +21,8 @@ function makeLog(
     | "MarketCreated"
     | "Staked"
     | "SettlementRetryScheduled"
+    | "SettlementRetriesExhausted"
+    | "SettlementRetryFailed"
     | "MarketSettled"
     | "MarketVoided"
     | "Redeemed"
@@ -162,6 +164,23 @@ describe("decodeActivity", () => {
       predictionMarketsAbi,
     );
     expect(entry.label).toBe("Settled as a refund");
+  });
+
+  it("decodes SettlementRetriesExhausted", () => {
+    const [entry] = decodeActivity(
+      [makeLog("SettlementRetriesExhausted", { marketId: 0n }, [], [])],
+      predictionMarketsAbi,
+    );
+    expect(entry.label).toBe("No round, no retries left");
+  });
+
+  it("decodes SettlementRetryFailed with the Schedule Service response code", () => {
+    const [entry] = decodeActivity(
+      [makeLog("SettlementRetryFailed", { marketId: 0n }, [{ name: "responseCode", type: "int64" }], [33n])],
+      predictionMarketsAbi,
+    );
+    expect(entry.label).toBe("No round, retry could not be booked");
+    expect(entry.detail).toBe("Schedule Service response 33");
   });
 
   it("decodes MarketVoided", () => {

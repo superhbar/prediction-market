@@ -16,7 +16,7 @@ One contract, `PredictionMarkets.sol`, holds every market. It creates two HTS to
 
 The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (pool split, price chart, stake panel, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
 
-Around it: 89 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 218/218 lines, 88% branches), 45 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
+Around it: 104 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 238/238 lines, 89% branches), 58 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
 
 ## Quick start
 
@@ -203,7 +203,7 @@ yarn foundry:test
 yarn next:test
 ```
 
-`yarn foundry:test` runs 89 unit tests. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent for the production contracts (PredictionMarkets 218/218 lines, 88% branches). `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
+`yarn foundry:test` runs 104 unit tests. HTS and the Schedule Service are mocked with `vm.etch` at `0x167` and `0x16b`, Chainlink and Pyth use mocks, and a fuzz test proves winners never exceed the pool. Line coverage is 100 percent for the production contracts (PredictionMarkets 238/238 lines, 89% branches). `hedera-forking` does not emulate the Schedule Service, which is why HSS is mocked and the e2e script runs on real testnet instead.
 
 `yarn next:test` runs vitest for units (including the pre-stake payout preview), feeds, status, Hashscan helpers and the HBAR price conversion. Redeem amounts come from the contract's own `quotePayout`.
 

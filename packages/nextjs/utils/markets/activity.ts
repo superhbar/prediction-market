@@ -118,6 +118,22 @@ function toEntry(eventName: string, args: EventArgs, log: MirrorContractLog): Ac
         ...base(log),
       };
     }
+    case "SettlementRetriesExhausted": {
+      return {
+        kind: eventName,
+        label: "No round, no retries left",
+        detail: "Anyone can settle once a round lands, use Pyth, or void after the grace period",
+        ...base(log),
+      };
+    }
+    case "SettlementRetryFailed": {
+      return {
+        kind: eventName,
+        label: "No round, retry could not be booked",
+        detail: `Schedule Service response ${Number(args.responseCode ?? 0)}`,
+        ...base(log),
+      };
+    }
     case "MarketSettled": {
       const source = Number(args.source ?? PriceSource.None);
       if (source === PriceSource.None) {
