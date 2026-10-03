@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { StakePanel } from "~~/components/markets/StakePanel";
 import { TradePanel } from "~~/components/markets/TradePanel";
-import { SegmentedTabs } from "~~/components/markets/ui";
+import { SegmentedTabs, tabIds } from "~~/components/markets/ui";
 import { useTargetNetwork } from "~~/hooks/scaffold-hbar";
 import { SAUCERSWAP } from "~~/utils/markets/saucerswap";
 import { type Market, MarketState, type UiStatus } from "~~/utils/markets/types";
@@ -30,6 +30,7 @@ export function PositionCard({ marketId, market, status, initialSide }: Position
     Date.now() < Number(market.expiry) * 1000 || !canTrade ? "stake" : "trade",
   );
   const active: Tab = canTrade ? tab : "stake";
+  const idPrefix = `position-${marketId}`;
 
   return (
     <section className="panel p-5">
@@ -37,6 +38,7 @@ export function PositionCard({ marketId, market, status, initialSide }: Position
         <div className="mb-4">
           <SegmentedTabs
             ariaLabel="Take a position"
+            idPrefix={idPrefix}
             fill
             value={active}
             onChange={setTab}
@@ -47,7 +49,11 @@ export function PositionCard({ marketId, market, status, initialSide }: Position
           />
         </div>
       )}
-      <div role={canTrade ? "tabpanel" : undefined}>
+      <div
+        {...(canTrade
+          ? { role: "tabpanel", id: tabIds(idPrefix, active).panel, "aria-labelledby": tabIds(idPrefix, active).tab }
+          : {})}
+      >
         {active === "stake" ? (
           <StakePanel marketId={marketId} market={market} status={status} initialSide={initialSide} embedded />
         ) : (

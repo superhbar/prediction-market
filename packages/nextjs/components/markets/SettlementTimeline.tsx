@@ -19,8 +19,11 @@ import { notification } from "~~/utils/scaffold-hbar";
 type SettlementTimelineProps = {
   marketId: number;
   market: Market;
-  /** Latest Chainlink round at or after expiry exists. */
-  roundAvailable: boolean;
+  /**
+   * The contract's chainlinkSettlementRound answer: true when a provably first round can settle the market, false
+   * when none can, undefined while it is unread or the read failed. Only an explicit false opens the Pyth action.
+   */
+  roundAvailable: boolean | undefined;
 };
 
 /** Scheduled settlement, retries, outcome and fallback actions with Hashscan links. */
@@ -192,17 +195,17 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
         <p className="text-sm mt-4 text-base-content/60">Connect a wallet to settle or void.</p>
       )}
       <div className="flex flex-wrap gap-2 mt-4">
-        {isOpen && expired && roundAvailable && (
+        {isOpen && expired && roundAvailable === true && (
           <button className="btn btn-sm btn-primary" onClick={settleNow} disabled={!account || isMining}>
             {isMining ? "Settling…" : "Settle now"}
           </button>
         )}
-        {isOpen && pythWindowOpen && !roundAvailable && pythEnabled && (
+        {isOpen && pythWindowOpen && roundAvailable === false && pythEnabled && (
           <button className="btn btn-sm btn-outline" onClick={settleWithPyth} disabled={!account || isMining}>
             Settle with Pyth
           </button>
         )}
-        {isOpen && pythWindowOpen && !roundAvailable && !pythEnabled && (
+        {isOpen && pythWindowOpen && roundAvailable === false && !pythEnabled && (
           <p className="text-sm text-base-content/60 m-0 w-full">
             Pyth fallback is not configured. Voiding after the grace period still applies.
           </p>

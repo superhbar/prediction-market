@@ -8,6 +8,7 @@ import { useNow } from "~~/hooks/markets/useNow";
 import { useSaucerPool } from "~~/hooks/markets/useSaucerPool";
 import { useTokenAssociation } from "~~/hooks/markets/useTokenAssociation";
 import { useTargetNetwork, useTransactor } from "~~/hooks/scaffold-hbar";
+import scaffoldConfig from "~~/scaffold.config";
 import { hashscanLink } from "~~/utils/markets/hashscan";
 import {
   EXCHANGE_RATE_PRECOMPILE,
@@ -105,9 +106,16 @@ export function TradePanel({
           );
         })}
       </div>
-      {pool.isLoading ? (
+      {pool.status === "loading" ? (
         <p className="text-sm mt-4 mb-0 text-base-content/60">Looking for a pool…</p>
-      ) : pool.pair && pool.reserves ? (
+      ) : pool.status === "error" ? (
+        <div className="mt-4 text-sm text-base-content/70">
+          <p className="m-0">Could not read the SaucerSwap pool.</p>
+          <button className="btn btn-sm btn-ghost mt-2 border-base-300" onClick={pool.refetch}>
+            Retry
+          </button>
+        </div>
+      ) : pool.status === "ready" && pool.reserves ? (
         <SwapForm
           side={side}
           token={token}
@@ -159,31 +167,33 @@ function SwapForm({
   whbarToken,
   onDone,
 }: SwapFormProps) {
-  const { address: account } = useAccount();
+  const { address: account, chainId: walletChainId } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const [mode, setMode] = useState<Mode>("buy");
   const [amount, setAmount] = useState("1");
-  const { writeContractAsync, isPending } = useWriteContract();
+  const { writeContractAsync } = useWriteContract();
   const transact = useTransactor();
+  // Covers the whole approve-then-swap sequence through its receipts, not only the wallet prompt.
+  const [busy, setBusy] = useState(false);
+  const wrongNetwork = !!account && walletChainId !== targetNetwork.id;
   // A buy sends the token to the buyer, which fails when the account has no free association slot. The check runs
   // in both modes, so switching to Buy never shows an answer from before a sell.
   const { association, associate, isAssociating } = useTokenAssociation(token, true);
   const blockedByAssociation = mode === "buy" && (association === "checking" || association === "needs-association");
-  const showAssociation =
-    mode === "buy" && (association === "needs-association" || association === "may-need-association");
 
   const amountValid = isPositiveDecimal(amount);
   // Position tokens and tinybar both have 8 decimals, so one parser serves both directions.
   const amountIn = amountValid ? hbarToTinybar(amount) : 0n;
   const path = mode === "buy" ? [whbarToken, token] : [token, whbarToken];
 
-  const { data: amountsOut } = useReadContract({
+  const { data: amountsOut, refetch: refetchQuote } = useReadContract({
     address: router,
     abi: saucerRouterAbi,
     functionName: "getAmountsOut",
     args: amountIn > 0n ? [amountIn, path] : undefined,
     chainId: targetNetwork.id,
-    query: { enabled: amountIn > 0n },
+    // The minimum output comes from this quote, so it follows the pool as other trades move it.
+    query: { enabled: amountIn > 0n, refetchInterval: scaffoldConfig.pollingInterval },
   });
   const quoted = amountsOut ? (amountsOut as readonly bigint[])[1] : undefined;
 
@@ -198,11 +208,16 @@ function SwapForm({
   const needsApproval = mode === "sell" && amountIn > 0n && ((allowance as bigint | undefined) ?? 0n) < amountIn;
 
   const submit = async () => {
-    if (!account || quoted === undefined) return;
+    if (!account || quoted === undefined || wrongNetwork || busy) return;
+    // Pinning the chain and account makes the wallet refuse a switch made after this click, instead of sending
+    // the next transaction of the sequence on another network or from another account.
+    const pinned = { chainId: targetNetwork.id, account } as const;
+    setBusy(true);
     try {
       if (mode === "buy") {
         await transact(() =>
           writeContractAsync({
+            ...pinned,
             address: router,
             abi: saucerRouterAbi,
             functionName: "swapExactETHForTokens",
@@ -215,6 +230,7 @@ function SwapForm({
         if (needsApproval) {
           await transact(() =>
             writeContractAsync({
+              ...pinned,
               address: token,
               abi: erc20ApproveAbi,
               functionName: "approve",
@@ -226,6 +242,7 @@ function SwapForm({
         }
         await transact(() =>
           writeContractAsync({
+            ...pinned,
             address: router,
             abi: saucerRouterAbi,
             functionName: "swapExactTokensForETH",
@@ -237,6 +254,9 @@ function SwapForm({
       onDone();
     } catch {
       // The transactor already shows the error.
+    } finally {
+      setBusy(false);
+      void refetchQuote();
     }
   };
 
@@ -288,26 +308,28 @@ function SwapForm({
               : formatHbar(minimumOut(quoted))}
         </dd>
       </dl>
-      {showAssociation && (
+      {mode === "buy" && (
         <AssociationPrompt
           side={side}
-          required={association === "needs-association"}
+          association={association}
           onAssociate={associate}
           isAssociating={isAssociating}
         />
       )}
       <button
         className="btn btn-primary w-full mt-4"
-        disabled={!account || !amountValid || quoted === undefined || isPending || blockedByAssociation}
+        disabled={!account || wrongNetwork || !amountValid || quoted === undefined || busy || blockedByAssociation}
         onClick={submit}
       >
-        {isPending
+        {busy
           ? "Confirm in wallet…"
-          : mode === "buy"
-            ? `Buy ${side} with ${amountValid ? amount : "-"} HBAR`
-            : needsApproval
-              ? `Approve and sell ${amountValid ? amount : "-"} ${side}`
-              : `Sell ${amountValid ? amount : "-"} ${side}`}
+          : wrongNetwork
+            ? `Switch your wallet to ${targetNetwork.name}`
+            : mode === "buy"
+              ? `Buy ${side} with ${amountValid ? amount : "-"} HBAR`
+              : needsApproval
+                ? `Approve and sell ${amountValid ? amount : "-"} ${side}`
+                : `Sell ${amountValid ? amount : "-"} ${side}`}
       </button>
       <PoolDepth side={side} reserves={reserves} />
       <p className="text-xs text-base-content/50 mt-3 mb-0">
@@ -410,8 +432,11 @@ function OpenPoolForm({ side, token, router, factory, onDone }: OpenPoolFormProp
   const { targetNetwork } = useTargetNetwork();
   const [tokens, setTokens] = useState("2");
   const [hbar, setHbar] = useState("1");
-  const { writeContractAsync, isPending } = useWriteContract();
+  const { writeContractAsync } = useWriteContract();
   const transact = useTransactor();
+  const { chainId: walletChainId } = useAccount();
+  const [busy, setBusy] = useState(false);
+  const wrongNetwork = !!account && walletChainId !== targetNetwork.id;
 
   // The factory charges a fixed USD fee in tinycents; the exchange-rate precompile converts it to tinybar.
   const { data: feeTinycents } = useReadContract({
@@ -432,7 +457,9 @@ function OpenPoolForm({ side, token, router, factory, onDone }: OpenPoolFormProp
   const valid = isPositiveDecimal(tokens) && isPositiveDecimal(hbar) && feeTinybar !== undefined;
 
   const open = async () => {
-    if (!account || !valid) return;
+    if (!account || !valid || wrongNetwork || busy) return;
+    const pinned = { chainId: targetNetwork.id, account } as const;
+    setBusy(true);
     const tokenAmount = hbarToTinybar(tokens);
     // A few percent over the quoted fee covers rate drift between this read and execution; the router
     // keeps the fee and adds the rest as liquidity.
@@ -440,6 +467,7 @@ function OpenPoolForm({ side, token, router, factory, onDone }: OpenPoolFormProp
     try {
       await transact(() =>
         writeContractAsync({
+          ...pinned,
           address: token,
           abi: erc20ApproveAbi,
           functionName: "approve",
@@ -449,6 +477,7 @@ function OpenPoolForm({ side, token, router, factory, onDone }: OpenPoolFormProp
       );
       await transact(() =>
         writeContractAsync({
+          ...pinned,
           address: router,
           abi: saucerRouterAbi,
           functionName: "addLiquidityETHNewPool",
@@ -460,6 +489,8 @@ function OpenPoolForm({ side, token, router, factory, onDone }: OpenPoolFormProp
       onDone();
     } catch {
       // The transactor already shows the error.
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -495,8 +526,16 @@ function OpenPoolForm({ side, token, router, factory, onDone }: OpenPoolFormProp
         SaucerSwap&apos;s pool fee: {feeTinybar !== undefined ? formatHbar(feeTinybar as bigint) : "…"} ($2, at the
         network exchange rate), paid on top of your HBAR deposit.
       </p>
-      <button className="btn btn-primary w-full mt-4" disabled={!account || !valid || isPending} onClick={open}>
-        {isPending ? "Confirm in wallet…" : `Open ${side}/HBAR pool`}
+      <button
+        className="btn btn-primary w-full mt-4"
+        disabled={!account || wrongNetwork || !valid || busy}
+        onClick={open}
+      >
+        {busy
+          ? "Confirm in wallet…"
+          : wrongNetwork
+            ? `Switch your wallet to ${targetNetwork.name}`
+            : `Open ${side}/HBAR pool`}
       </button>
     </div>
   );

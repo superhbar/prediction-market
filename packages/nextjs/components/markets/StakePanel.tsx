@@ -166,14 +166,7 @@ export function StakePanel({ marketId, market, status, initialSide = "YES", embe
       </dl>
 
       {!account && <p className="text-sm mt-3 text-base-content/60">Connect a wallet to stake.</p>}
-      {(association === "needs-association" || association === "may-need-association") && (
-        <AssociationPrompt
-          side={side}
-          required={association === "needs-association"}
-          onAssociate={associate}
-          isAssociating={isAssociating}
-        />
-      )}
+      <AssociationPrompt side={side} association={association} onAssociate={associate} isAssociating={isAssociating} />
 
       <button
         className={`btn w-full mt-4 border-0 text-base-200 ${yes ? "bg-yes hover:bg-yes/90" : "bg-no hover:bg-no/90"}`}

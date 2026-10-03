@@ -11,7 +11,8 @@ import {
 import { readMarkets } from "~~/utils/markets/serverReads";
 
 type PublishOutcome = {
-  record: PublishedRecord | { record: SettlementRecord; sequenceNumber: number; transactionId: string };
+  /** `sequenceNumber` is null when the message was sent but its receipt could not be read. */
+  record: PublishedRecord | { record: SettlementRecord; sequenceNumber: number | null; transactionId: string };
   created: boolean;
 };
 
@@ -34,7 +35,9 @@ function marketIdOf(value: string | null | undefined): number | null {
 
 /**
  * The settlement record of a market on the HCS record topic, if any.
- * GET /api/record?marketId=0 -> { enabled, topicId, canPublish, record: { record, sequenceNumber, consensusTimestamp } | null }
+ * GET /api/record?marketId=0 -> { enabled, topicId, chainId, contract, canPublish, complete,
+ *   record: { record, sequenceNumber, consensusTimestamp } | null }
+ * `complete` is false when the topic was too long to read in full; a null record then proves nothing.
  * Without HCS_RECORD_TOPIC_ID it answers { enabled: false } and the app works as before.
  */
 export async function GET(request: Request) {
@@ -45,9 +48,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "marketId must be a non-negative integer." }, { status: 400 });
   try {
     const { chainId, contract } = await readMarkets(() => []);
-    const { messages } = await fetchTopicMessages(chainId, topicId);
+    const { messages, complete } = await fetchTopicMessages(chainId, topicId);
     const record = findRecord(messages, chainId, contract, marketId);
-    return NextResponse.json({ enabled: true, topicId, canPublish, record });
+    return NextResponse.json({ enabled: true, topicId, chainId, contract, canPublish, complete, record });
   } catch {
     return NextResponse.json({ error: "Could not read the record topic." }, { status: 502 });
   }
@@ -64,8 +67,9 @@ export async function POST(request: Request) {
   if (!topicId || !canPublish || !operatorId || !operatorKey) {
     return NextResponse.json({ error: "Publishing records is not configured on this server." }, { status: 501 });
   }
-  const body = (await request.json().catch(() => ({}))) as { marketId?: unknown };
-  const marketId = marketIdOf(body.marketId === undefined ? null : String(body.marketId));
+  const body: unknown = await request.json().catch(() => null);
+  const raw = body !== null && typeof body === "object" ? (body as { marketId?: unknown }).marketId : undefined;
+  const marketId = marketIdOf(typeof raw === "number" || typeof raw === "string" ? String(raw) : null);
   if (marketId === null)
     return NextResponse.json({ error: "marketId must be a non-negative integer." }, { status: 400 });
 
@@ -106,13 +110,18 @@ export async function POST(request: Request) {
   }
 }
 
-/** Submits one message to the topic, paid by the operator, and waits for its receipt. */
+/**
+ * Submits one message to the topic, paid by the operator, and waits for its receipt. Once the network accepted the
+ * transaction it counts as sent even if the receipt cannot be read, so the job resolves and a retry from this
+ * instance does not pay for a second copy.
+ */
 async function submit(chainId: number, topicId: string, operatorId: string, operatorKey: string, message: string) {
   const client = operatorClient(chainId, operatorId, operatorKey);
   try {
     const response = await new TopicMessageSubmitTransaction().setTopicId(topicId).setMessage(message).execute(client);
-    const receipt = await response.getReceipt(client);
-    return { sequenceNumber: Number(receipt.topicSequenceNumber), transactionId: response.transactionId.toString() };
+    const transactionId = response.transactionId.toString();
+    const receipt = await response.getReceipt(client).catch(() => null);
+    return { sequenceNumber: receipt ? Number(receipt.topicSequenceNumber) : null, transactionId };
   } finally {
     client.close();
   }

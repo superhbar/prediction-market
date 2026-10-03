@@ -106,6 +106,8 @@ const Home = () => {
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <SegmentedTabs
           ariaLabel="Status"
+          idPrefix="status-filter"
+          kind="radio"
           value={filter}
           onChange={setFilter}
           tabs={FILTERS.map(entry => ({
@@ -126,15 +128,14 @@ const Home = () => {
         </label>
       </div>
 
-      <div role="tablist" aria-label="Asset" className="mt-3 flex flex-wrap gap-2">
+      <div role="group" aria-label="Asset" className="mt-3 flex flex-wrap gap-2">
         {["all", ...FEED_KEYS].map(feed => {
           const selected = asset === feed;
           const symbol = feed.split("/")[0];
           return (
             <button
               key={feed}
-              role="tab"
-              aria-selected={selected}
+              aria-pressed={selected}
               onClick={() => setAsset(feed)}
               className={`flex items-center gap-1.5 rounded-full border py-1 text-[13px] font-semibold transition-colors ${
                 feed === "all" ? "px-3" : "pl-1 pr-3"

@@ -72,11 +72,12 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
   const roundEligible = settlementRound === undefined ? undefined : settlementRound[0];
   const roundAvailable = roundEligible === true;
   const status = config ? deriveStatus(market, nowSec, config, roundEligible) : "open";
-  // The round the chart marks: the one the market settled on, or the one settle() would use now.
+  // The round the chart marks: the one the market settled on, or, while it is still open, the one settle() would
+  // use now. A market settled on Pyth or voided has no Chainlink settlement round to mark.
   const settlementTime =
     market.state === MarketState.Settled && market.source === PriceSource.Chainlink
       ? market.settlementTime
-      : roundAvailable
+      : market.state === MarketState.Open && roundAvailable
         ? settlementRound?.[2]
         : undefined;
 
@@ -133,7 +134,7 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
               maxRoundLag={config?.maxRoundLag}
             />
           )}
-          <SettlementTimeline marketId={Number(id)} market={market} roundAvailable={roundAvailable} />
+          <SettlementTimeline marketId={Number(id)} market={market} roundAvailable={roundEligible} />
           <ActivityPanel marketId={id} />
         </div>
         <div className="lg:col-span-4 order-first lg:order-none">

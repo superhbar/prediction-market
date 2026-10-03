@@ -51,7 +51,7 @@ npm users: replace `yarn <script>` with `npm run <script>`. Inside `packages/fou
 - `totalPoolLiability` (owed to traders) and `totalReserves` (sum of market reserves) are updated on every stake, redeem, reserve charge, and withdrawal. `withdrawReserve` pays at most balance surplus beyond both; underestimates land on the creator.
 - Tinybar inside the contract, always. No rescaling in Solidity; conversion lives only in `utils/markets/units.ts`.
 - Frontend uses explicit gas limits from `units.ts` GAS (createMarket 3M, stake 1.5M, settle/settleWithPyth 1M, redeem 800k, void/withdraw 300k). Do not rely on estimation.
-- Redeem amounts in the UI come from `quotePayout` as-is (it returns 0 until settlement). The only payout math in TS lives in `utils/markets/units.ts`: `projectedPayout` (pre-stake estimate), `payoutMultipleBps` (what a winning token pays) and `impliedChanceBps` (SaucerSwap price over that multiple). All three must stay the same formula as `quotePayout`, are display only, and stay labelled as estimates before expiry.
+- Redeem amounts in the UI come from `quotePayout` as-is (it returns 0 until settlement). The only payout math in TS lives in `utils/markets/units.ts`: `projectedPayout` (pre-stake estimate), `payoutMultipleBps` (what a winning token pays), `tokenPaysBps` (that multiple, or 0 for a loser and 1:1 for a refund, as on the market card) and `impliedChanceBps` (SaucerSwap price over that multiple). All four must stay the same formula as `quotePayout`, are display only, and stay labelled as estimates before expiry.
 
 ## Hedera gotchas
 
@@ -91,6 +91,8 @@ Measured on testnet; details and evidence in `docs/hedera-notes.md`. Re-measure 
 - No owner, no admin, no pauser. Do not add privileged roles.
 - No `delegatecall` to `0x16b`. Scheduled calls are direct CALLs from the contract.
 - No `forge script --broadcast` to Hashio. Use the `cast send` path in `scripts-js/`.
+- Every frontend write pins `chainId: targetNetwork.id` and the connected `account`, so a wallet on another network or a switched account is refused instead of sending to the wrong place.
+- Association is checked before any transfer of a position token to the user (stake, SaucerSwap buy) with `useTokenAssociation`; `associate()` counts as done only once the mirror node shows the relationship, since HTS failures come back inside a successful EVM call.
 - No Pyth key, operator key (or any secret) in client code or `NEXT_PUBLIC_` vars. `HEDERA_OPERATOR_KEY` is read only in `utils/markets/hcs.ts`.
 - HCS records are optional: with no `HCS_RECORD_TOPIC_ID` the record panel is hidden and nothing else changes. Record a market only once it is Settled or Voided, and keep readers taking the first record per market by sequence number.
 - No hand edits to `deployedContracts.ts`. Regenerate via deploy.

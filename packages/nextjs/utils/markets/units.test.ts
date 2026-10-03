@@ -1,3 +1,4 @@
+import { MarketOutcome, MarketState } from "./types";
 import {
   decimalToPrice,
   formatExactPrice,
@@ -14,6 +15,7 @@ import {
   suggestStrike,
   tinybarToHbar,
   tinybarToWeibar,
+  tokenPaysBps,
   yesPercent,
 } from "./units";
 import { describe, expect, it } from "vitest";
@@ -112,5 +114,27 @@ describe("payoutMultipleBps", () => {
 
   it("is undefined while a side has no stake", () => {
     expect(payoutMultipleBps(0n, 300_000_000n)).toBeUndefined();
+  });
+});
+
+describe("tokenPaysBps", () => {
+  const pools = { yesPool: 500_000_000n, noPool: 300_000_000n };
+
+  it("gives the would-win multiple while open", () => {
+    expect(tokenPaysBps({ state: MarketState.Open, outcome: MarketOutcome.Unresolved, ...pools }, true)).toBe(16_000n);
+    expect(tokenPaysBps({ state: MarketState.Open, outcome: MarketOutcome.Unresolved, ...pools }, false)).toBe(26_666n);
+  });
+
+  it("pays winners the multiple and losers nothing once settled", () => {
+    const settled = { state: MarketState.Settled, outcome: MarketOutcome.Yes, ...pools };
+    expect(tokenPaysBps(settled, true)).toBe(16_000n);
+    expect(tokenPaysBps(settled, false)).toBe(0n);
+  });
+
+  it("refunds both sides 1:1 when voided or Invalid", () => {
+    expect(tokenPaysBps({ state: MarketState.Voided, outcome: MarketOutcome.Unresolved, ...pools }, false)).toBe(
+      10_000n,
+    );
+    expect(tokenPaysBps({ state: MarketState.Settled, outcome: MarketOutcome.Invalid, ...pools }, true)).toBe(10_000n);
   });
 });

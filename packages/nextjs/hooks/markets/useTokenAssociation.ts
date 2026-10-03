@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Address } from "viem";
 import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 import { associateAbi } from "~~/hooks/markets/abis";
@@ -16,95 +17,98 @@ import {
 import { GAS } from "~~/utils/markets/units";
 import { notification } from "~~/utils/scaffold-hbar";
 
+/** `unknown`: the mirror node could not be read; the check keeps retrying and the UI offers association anyway. */
 export type Association = "checking" | TokenReceivable | "unknown";
 
-/** Mirror lookups repeat this often while an association is outstanding, to notice one made elsewhere. */
+/** Lookups repeat this often while the account may be unable to receive the token. */
 const RECHECK_MS = 15_000;
+/** After associate() succeeds, how long to wait for the mirror node to show the association. */
+const CONFIRM_ATTEMPTS = 10;
+const CONFIRM_INTERVAL_MS = 2_000;
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Whether the connected account can receive `token`, and a one-click HIP-719 association when it may not. A stake
  * or a SaucerSwap buy sends the account the token, so both check first. `enabled` gates the mirror lookups to the
- * moments a transfer is actually possible.
+ * moments a transfer is actually possible; every time it turns on, and on every mount or reconnect, the answer is
+ * looked up again before a transfer is allowed.
  */
 export function useTokenAssociation(token: Address, enabled: boolean) {
   const { address: account } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const publicClient = usePublicClient({ chainId: targetNetwork.id });
-  const { writeContractAsync, isPending } = useWriteContract();
-  const [isConfirming, setIsConfirming] = useState(false);
-  // Bumped to force a fresh lookup: on a timer while an association is outstanding, and after associating.
-  const [round, setRound] = useState(0);
-  const baseKey = account && enabled ? `${account}:${token}:${targetNetwork.id}` : "";
-  const lookupKey = baseKey ? `${baseKey}:${round}` : "";
-  const [snapshot, setSnapshot] = useState<{ baseKey: string; key: string; value: Association }>({
-    baseKey: "",
-    key: "",
-    value: "unknown",
+  const queryClient = useQueryClient();
+  const { writeContractAsync } = useWriteContract();
+  const [isAssociating, setIsAssociating] = useState(false);
+  const tokenId = longZeroToEntityId(token);
+  const queryKey = ["token-association", targetNetwork.id, account, token] as const;
+
+  const query = useQuery({
+    queryKey,
+    enabled: enabled && !!account && !!tokenId,
+    staleTime: 0,
+    refetchOnMount: "always",
+    retry: 2,
+    queryFn: async (): Promise<TokenReceivable> => {
+      if (!account || !tokenId) return "ok";
+      // An address with no Hedera account yet gets one with unlimited automatic associations when it is first
+      // funded, so there is nothing to associate, and its mirror lookups would only 404.
+      if (!(await fetchAccountExists(targetNetwork.id, account))) return "ok";
+      const mirror = mirrorBaseForChain(targetNetwork.id);
+      const [info, associated] = await Promise.all([
+        fetchAccount(mirror, account),
+        fetchIsTokenAssociated(mirror, account, tokenId),
+      ]);
+      return classifyAssociation(info.maxAutomaticTokenAssociations, associated);
+    },
+    refetchInterval: current =>
+      current.state.status === "error" || (current.state.data !== undefined && current.state.data !== "ok")
+        ? RECHECK_MS
+        : false,
   });
 
-  useEffect(() => {
-    if (!lookupKey || snapshot.key === lookupKey) return;
-    const tokenId = longZeroToEntityId(token);
-    if (!tokenId || !account) return;
-    let cancelled = false;
-    const mirror = mirrorBaseForChain(targetNetwork.id);
-    const accountAddress = account;
-    // An address with no Hedera account yet gets one with unlimited automatic associations when it is first
-    // funded, so there is nothing to associate, and its mirror lookups would only 404.
-    fetchAccountExists(targetNetwork.id, accountAddress)
-      .then(exists =>
-        exists
-          ? Promise.all([fetchAccount(mirror, accountAddress), fetchIsTokenAssociated(mirror, accountAddress, tokenId)])
-          : null,
-      )
-      .then(result => {
-        if (cancelled) return;
-        const value = result === null ? "ok" : classifyAssociation(result[0].maxAutomaticTokenAssociations, result[1]);
-        setSnapshot({ baseKey, key: lookupKey, value });
-      })
-      .catch(() => {
-        if (!cancelled) setSnapshot({ baseKey, key: lookupKey, value: "unknown" });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [lookupKey, baseKey, snapshot.key, token, account, targetNetwork.id]);
-
-  // Keep the last answer for the same account and token while a repeat lookup runs, so the prompt does not flicker.
-  const association: Association = !baseKey
-    ? "unknown"
-    : snapshot.key === lookupKey || snapshot.baseKey === baseKey
-      ? snapshot.value
-      : "checking";
-  const outstanding = association === "needs-association" || association === "may-need-association";
-
-  useEffect(() => {
-    if (!outstanding) return;
-    const timer = setInterval(() => setRound(value => value + 1), RECHECK_MS);
-    return () => clearInterval(timer);
-  }, [outstanding]);
+  let association: Association;
+  if (!enabled || !account) association = "unknown";
+  else if (query.data === undefined) association = query.isError ? "unknown" : "checking";
+  // A cached "ok" is re-proven on every mount, reconnect and re-enable before a transfer is allowed. A warning
+  // stays on screen during its periodic recheck so the prompt does not flicker.
+  else if (query.data === "ok" && query.isFetching) association = "checking";
+  else association = query.data;
 
   const associate = async () => {
-    if (!baseKey || !publicClient) return;
+    if (!account || !tokenId || !publicClient) return;
+    setIsAssociating(true);
     try {
       const hash = await writeContractAsync({
+        chainId: targetNetwork.id,
+        account,
         address: token,
         abi: associateAbi,
         functionName: "associate",
         gas: BigInt(GAS.associate),
       });
-      setIsConfirming(true);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       if (receipt.status !== "success") throw new Error("Association reverted");
-      setSnapshot({ baseKey, key: lookupKey, value: "ok" });
-      notification.success("Token associated. You can continue now.");
+      // associate() reports HTS failures as a return code inside a successful EVM call, so only the account's
+      // token relationship on the mirror node proves it worked.
+      const mirror = mirrorBaseForChain(targetNetwork.id);
+      for (let attempt = 0; attempt < CONFIRM_ATTEMPTS; attempt++) {
+        if (await fetchIsTokenAssociated(mirror, account, tokenId).catch(() => false)) {
+          queryClient.setQueryData(queryKey, "ok");
+          notification.success("Token associated. You can continue now.");
+          return;
+        }
+        await sleep(CONFIRM_INTERVAL_MS);
+      }
+      throw new Error("Association not visible on the mirror node");
     } catch {
-      notification.error("Association failed. Try again.");
-      setRound(value => value + 1);
+      notification.error("Association did not go through. Try again.");
+      void queryClient.invalidateQueries({ queryKey });
     } finally {
-      setIsConfirming(false);
+      setIsAssociating(false);
     }
   };
 
-  return { association, associate, isAssociating: isPending || isConfirming };
+  return { association, associate, isAssociating };
 }

@@ -24,6 +24,8 @@ export function useSaucerPool(token: Address | undefined): {
   pair: Address | undefined;
   reserves: PoolReserves | undefined;
   price: bigint | undefined;
+  /** `none` only once the factory has answered that no pair exists; a pending or failed read is never `none`. */
+  status: "loading" | "none" | "ready" | "error";
   isLoading: boolean;
   refetch: () => void;
 } {
@@ -32,6 +34,7 @@ export function useSaucerPool(token: Address | undefined): {
   const {
     data: pairAddress,
     isPending: pairPending,
+    isError: pairError,
     refetch: refetchPair,
   } = useReadContract({
     address: deployment?.factory,
@@ -43,7 +46,12 @@ export function useSaucerPool(token: Address | undefined): {
   });
   const pair = pairAddress && pairAddress !== ZERO ? (pairAddress as Address) : undefined;
 
-  const { data: pairState, refetch: refetchState } = useReadContracts({
+  const {
+    data: pairState,
+    isPending: statePending,
+    isError: stateError,
+    refetch: refetchState,
+  } = useReadContracts({
     contracts: pair
       ? [
           { address: pair, abi: saucerPairAbi, functionName: "token0", chainId: targetNetwork.id },
@@ -60,8 +68,20 @@ export function useSaucerPool(token: Address | undefined): {
     reserves = orientReserves(token0.result as Address, reserve0, reserve1, deployment.whbarToken);
   }
 
+  const stateFailed = stateError || pairState?.some(entry => entry.status === "failure") === true;
+  const status = reserves
+    ? "ready"
+    : pairPending || (pair && statePending)
+      ? "loading"
+      : pairError || stateFailed
+        ? "error"
+        : pair
+          ? "loading"
+          : "none";
+
   return {
     supported: !!deployment,
+    status,
     pair,
     reserves,
     price: reserves ? spotPrice(reserves) : undefined,

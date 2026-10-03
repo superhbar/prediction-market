@@ -4,7 +4,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PublishedRecord } from "~~/utils/markets/record";
 
 type RecordStatus =
-  { enabled: false } | { enabled: true; topicId: string; canPublish: boolean; record: PublishedRecord | null };
+  | { enabled: false }
+  | {
+      enabled: true;
+      topicId: string;
+      /** The deployment the server records; the panel hides itself on any other network. */
+      chainId: number;
+      contract: string;
+      canPublish: boolean;
+      /** False when the topic was too long to read in full, so a missing record is not proof of absence. */
+      complete: boolean;
+      record: PublishedRecord | null;
+    };
 
 /**
  * A market's settlement record on the HCS record topic, through the app's /api/record route. `enabled` is false

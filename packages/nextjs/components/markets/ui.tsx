@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import type { PricePoint } from "~~/hooks/markets/useChainlinkHistory";
 import { ASSET_ICONS } from "~~/utils/brand";
 import type { UiStatus } from "~~/utils/markets/types";
@@ -88,35 +88,70 @@ export function Sparkline({ points, className = "" }: { points: PricePoint[]; cl
 
 type Tab<T extends string> = { value: T; label: ReactNode; count?: number };
 
-/** Segmented tab strip: the market list's status filter and the market page's Stake / Trade switch. */
+/** Element ids for a SegmentedTabs strip and the panel it controls, so both sides can reference each other. */
+export function tabIds(idPrefix: string, value: string) {
+  return { tab: `${idPrefix}-tab-${value}`, panel: `${idPrefix}-panel` };
+}
+
+/**
+ * Segmented strip: the market page's Stake / Trade switch (`kind="tabs"`) and the market list's status filter
+ * (`kind="radio"`, since it filters one list rather than switching panels). Both follow the WAI-ARIA keyboard
+ * pattern: one option in the tab order, arrow keys and Home/End move the selection. As tabs, each one points at
+ * the panel (`tabIds(idPrefix).panel`) that the caller renders with role="tabpanel".
+ */
 export function SegmentedTabs<T extends string>({
   tabs,
   value,
   onChange,
   ariaLabel,
+  idPrefix,
+  kind = "tabs",
   fill = false,
 }: {
   tabs: Tab<T>[];
   value: T;
   onChange: (value: T) => void;
   ariaLabel: string;
+  idPrefix: string;
+  kind?: "tabs" | "radio";
   /** Stretch the tabs to share the full width, as inside a card. */
   fill?: boolean;
 }) {
+  const select = (index: number) => {
+    const next = tabs[(index + tabs.length) % tabs.length];
+    onChange(next.value);
+    document.getElementById(tabIds(idPrefix, next.value).tab)?.focus();
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const moves: Record<string, number> = {
+      ArrowRight: index + 1,
+      ArrowLeft: index - 1,
+      Home: 0,
+      End: tabs.length - 1,
+    };
+    if (!(event.key in moves)) return;
+    event.preventDefault();
+    select(moves[event.key]);
+  };
   return (
     <div
-      role="tablist"
+      role={kind === "tabs" ? "tablist" : "radiogroup"}
       aria-label={ariaLabel}
       className={`flex max-w-full overflow-x-auto rounded-xl border border-base-300 p-1 ${fill ? "w-full" : ""}`}
     >
-      {tabs.map(tab => {
+      {tabs.map((tab, index) => {
         const selected = tab.value === value;
+        const ids = tabIds(idPrefix, tab.value);
         return (
           <button
             key={tab.value}
-            role="tab"
-            aria-selected={selected}
+            id={ids.tab}
+            {...(kind === "tabs"
+              ? { role: "tab", "aria-selected": selected, "aria-controls": ids.panel }
+              : { role: "radio", "aria-checked": selected })}
+            tabIndex={selected ? 0 : -1}
             onClick={() => onChange(tab.value)}
+            onKeyDown={event => onKeyDown(event, index)}
             className={`flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 text-[13.5px] font-semibold transition-colors ${
               fill ? "flex-1" : ""
             } ${selected ? "bg-base-100 text-base-content" : "text-base-content/60 hover:text-base-content"}`}

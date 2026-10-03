@@ -6,7 +6,7 @@ import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
 import { type MarketFilter, isRefund, resolutionLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
 import type { Market, UiStatus } from "~~/utils/markets/types";
-import { formatExactPrice, formatHbar, formatMultiple, payoutMultipleBps, yesPercent } from "~~/utils/markets/units";
+import { formatExactPrice, formatHbar, formatMultiple, tokenPaysBps, yesPercent } from "~~/utils/markets/units";
 
 type MarketCardProps = {
   marketId: number;
@@ -17,9 +17,9 @@ type MarketCardProps = {
 };
 
 /** "1.60x" if that side wins, or a dash while nobody has staked on it. */
-function multipleLabel(sidePool: bigint, otherPool: bigint): string {
-  const multiple = payoutMultipleBps(sidePool, otherPool);
-  return multiple ? formatMultiple(multiple) : "-";
+function multipleLabel(market: Market, yes: boolean): string {
+  const bps = tokenPaysBps(market, yes);
+  return bps === undefined ? "-" : bps === 0n ? "0x" : formatMultiple(bps);
 }
 
 /** What a closed market is waiting for, or how it ended. */
@@ -74,12 +74,8 @@ export function MarketCard({ marketId, market, status, points = [] }: MarketCard
         <dl className="m-0 grid grid-cols-2 gap-x-4 text-sm">
           <dt className="text-base-content/60">Yes pays</dt>
           <dt className="text-base-content/60">No pays</dt>
-          <dd className="m-0 text-2xl font-bold tabular-nums text-yes">
-            {multipleLabel(market.yesPool, market.noPool)}
-          </dd>
-          <dd className="m-0 text-2xl font-bold tabular-nums text-no">
-            {multipleLabel(market.noPool, market.yesPool)}
-          </dd>
+          <dd className="m-0 text-2xl font-bold tabular-nums text-yes">{multipleLabel(market, true)}</dd>
+          <dd className="m-0 text-2xl font-bold tabular-nums text-no">{multipleLabel(market, false)}</dd>
         </dl>
         <Sparkline points={points} />
       </div>

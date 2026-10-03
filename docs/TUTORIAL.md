@@ -104,7 +104,7 @@ creatorFeeBps: 100
 
 ### 3.3 Tests
 
-The two `Config({...})` literals in `packages/foundry/test/PredictionMarkets.t.sol` now need the new field. Give them `creatorFeeBps: 0`, so every existing test keeps its exact numbers. Then add a test that deploys with the fee on:
+Every `Config({...})` literal in the tests now needs the new field: two in `packages/foundry/test/PredictionMarkets.t.sol` and one in `packages/foundry/test/PredictionMarkets.invariant.t.sol`. Give them `creatorFeeBps: 0`, so every existing test and invariant keeps its exact numbers. Then add a test that deploys with the fee on:
 
 ```solidity
 function test_Stake_CreatorFeeGoesToReserve() public {

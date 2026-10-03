@@ -19,7 +19,8 @@ export function RecordPanel({ marketId, market }: { marketId: number; market: Ma
   const { targetNetwork } = useTargetNetwork();
   const closed = isRecordable(market);
   const { status, publish } = useSettlementRecord(marketId, closed);
-  if (!status?.enabled) return null;
+  // The server records one deployment; on any other network its market ids mean different markets.
+  if (!status?.enabled || status.chainId !== targetNetwork.id) return null;
   const topicLink = hashscanLink(targetNetwork.id, "topic", status.topicId);
 
   return (
@@ -47,9 +48,11 @@ export function RecordPanel({ marketId, market }: { marketId: number; market: Ma
       ) : closed ? (
         <>
           <p className="text-sm mt-2 mb-0 text-base-content/70">
-            This market&apos;s result is not on the record topic yet.
+            {status.complete
+              ? "This market's result is not on the record topic yet."
+              : "The record topic is too long to check in full, so this market's record may already exist."}
           </p>
-          {status.canPublish && (
+          {status.canPublish && status.complete && (
             <button
               className="btn btn-sm btn-outline mt-3"
               disabled={publish.isPending}

@@ -1,3 +1,4 @@
+import { MarketOutcome, MarketState } from "./types";
 import { formatUnits, parseEther, parseUnits } from "viem";
 
 /**
@@ -25,13 +26,13 @@ export const GAS = {
   redeem: 800_000,
   voidMarket: 300_000,
   withdrawReserve: 300_000,
-  /** Unmeasured: HIP-719 associate() on a position token. */
-  associate: 300_000,
+  /** HIP-719 associate() on a position token, measured 726k on testnet (300k runs out). */
+  associate: 1_000_000,
   /** SaucerSwap V1, measured on testnet: opening a pool used 6.79M (3.2M from SaucerSwap's docs runs out). */
   openPool: 8_000_000,
   /**
-   * Measured 0.18M for HBAR to position token into an associated account. A buyer's first transfer of a token
-   * auto-associates it (about 0.75M, as for a first stake), so buys get the stake limit.
+   * Measured on testnet: 0.15M to 0.18M into an associated account, 0.89M for a buyer's first transfer of the token
+   * (it auto-associates), so buys get the stake limit.
    */
   swapBuy: 1_500_000,
   /** Measured 0.87M for position token to HBAR (unwraps WHBAR). */
@@ -156,4 +157,20 @@ export function yesPercent(yesPool: bigint, noPool: bigint): number {
 /** True when the string is a positive decimal number suitable for an HBAR or price input. */
 export function isPositiveDecimal(value: string): boolean {
   return /^\d+(\.\d+)?$/.test(value.trim()) && Number(value) > 0;
+}
+
+/**
+ * What one token of a side pays per token staked, in basis points, matching quotePayout: refunds (void or Invalid)
+ * pay 1:1, a settled market pays its winners the pool multiple and its losers nothing, and an open market gives
+ * the multiple that side would pay if it won. Display only.
+ */
+export function tokenPaysBps(
+  market: { state: number; outcome: number; yesPool: bigint; noPool: bigint },
+  yes: boolean,
+): bigint | undefined {
+  if (market.state === MarketState.Voided || market.outcome === MarketOutcome.Invalid) return 10_000n;
+  if (market.state === MarketState.Settled && market.outcome !== (yes ? MarketOutcome.Yes : MarketOutcome.No)) {
+    return 0n;
+  }
+  return yes ? payoutMultipleBps(market.yesPool, market.noPool) : payoutMultipleBps(market.noPool, market.yesPool);
 }
