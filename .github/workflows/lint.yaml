@@ -109,3 +109,18 @@ jobs:
           run next:test
           run foundry:test
           run next:build
+
+      # The gate also requires the app to boot and its core routes to answer, so serve the build that
+      # the previous step produced and request each route, checking the status and the rendered app name.
+      - name: Boot and request core routes
+        working-directory: ${{ runner.temp }}/app/packages/nextjs
+        run: |
+          npx next start -p 3000 > "$RUNNER_TEMP/next-start.log" 2>&1 &
+          for _ in $(seq 1 60); do curl -sf -o /dev/null http://localhost:3000/ && break; sleep 1; done
+          for route in / /markets/new /markets/0 /portfolio /debug; do
+            response=$(curl -s -w '\n%{http_code}' "http://localhost:3000$route")
+            status=$(tail -n1 <<<"$response")
+            echo "$route -> $status"
+            test "$status" = 200
+            grep -q Predera <<<"$response"
+          done
