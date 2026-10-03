@@ -36,6 +36,7 @@ const STATUS_COLOR: Record<UiStatus, string> = {
   "awaiting-settlement": "text-info",
   retrying: "text-info",
   "settle-available": "text-info",
+  "no-price": "text-warning",
   voidable: "text-error",
   settled: "text-primary",
   voided: "text-base-content/60",

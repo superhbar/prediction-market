@@ -61,4 +61,4 @@ export type MarketConfig = {
 
 /** UI status derived from a Market, the current time and the contract config. */
 export type UiStatus =
-  "open" | "awaiting-settlement" | "retrying" | "settle-available" | "settled" | "voidable" | "voided";
+  "open" | "awaiting-settlement" | "retrying" | "settle-available" | "no-price" | "settled" | "voidable" | "voided";

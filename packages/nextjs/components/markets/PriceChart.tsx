@@ -9,8 +9,15 @@ type PriceChartProps = {
   error: string | null;
   strike: bigint;
   feedLabel: string;
-  /** Market expiry: the first round at or after it is the settlement round and gets a marker. */
+  /** Market expiry, for the note shown while no round after it exists. */
   expiry?: bigint;
+  /**
+   * Publish time of the settlement round: the round the market settled on, or the one the contract's
+   * chainlinkSettlementRound would use now. Only that round gets a marker; the chart never decides eligibility.
+   */
+  settlementTime?: bigint;
+  /** How late a round may be and still settle, for the note when the first round after expiry came too late. */
+  maxRoundLag?: bigint;
   /** True once expiry has passed; the parent owns the clock so render stays pure. */
   expired?: boolean;
 };
@@ -20,7 +27,17 @@ const HEIGHT = 240;
 const PAD = 12;
 
 /** Inline SVG line chart from Chainlink rounds with a dashed strike line. No chart library. */
-export function PriceChart({ points, strike, feedLabel, expiry, expired, nowSec, error }: PriceChartProps) {
+export function PriceChart({
+  points,
+  strike,
+  feedLabel,
+  expiry,
+  expired,
+  settlementTime,
+  maxRoundLag,
+  nowSec,
+  error,
+}: PriceChartProps) {
   if (points.length === 0) {
     return (
       <div className="panel p-5">
@@ -51,9 +68,18 @@ export function PriceChart({ points, strike, feedLabel, expiry, expired, nowSec,
   const lastY = y(last.normalized);
   // When the strike is the chart's maximum its label goes under the line, so it is not clipped.
   const strikeLabelY = strikeY < PAD + 16 ? strikeY + 18 : strikeY - 8;
-  const settleIndex = expiry === undefined ? -1 : points.findIndex(point => point.timestamp >= expiry);
+  const settleIndex = settlementTime === undefined ? -1 : points.findIndex(point => point.timestamp === settlementTime);
+  const firstAfterExpiry = expiry === undefined ? undefined : points.find(point => point.timestamp >= expiry);
   // Expired, but the feed has not published since: the price above is not the settlement price.
-  const waitingForRound = expired === true && settleIndex < 0;
+  const waitingForRound = expired === true && settleIndex < 0 && firstAfterExpiry === undefined;
+  // The feed did publish after expiry, but only after the window in which a round may settle the market.
+  const roundTooLate =
+    expired === true &&
+    settleIndex < 0 &&
+    firstAfterExpiry !== undefined &&
+    expiry !== undefined &&
+    maxRoundLag !== undefined &&
+    firstAfterExpiry.timestamp > expiry + maxRoundLag;
   // Near the right edge the marker label flips to the left of its line so it is not clipped.
   const settleLabelLeft = settleIndex >= 0 && x(settleIndex) > WIDTH * 0.7;
 
@@ -138,6 +164,13 @@ export function PriceChart({ points, strike, feedLabel, expiry, expired, nowSec,
           Every round shown was published before expiry, so none can settle this market. Chainlink last published at{" "}
           {shortExpiry(last.timestamp)}. The market settles on the first round published after{" "}
           {expiry !== undefined ? shortExpiry(expiry) : "expiry"}.
+        </p>
+      )}
+      {roundTooLate && firstAfterExpiry && maxRoundLag !== undefined && (
+        <p className="mt-2 mb-0 rounded-[10px] border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-base-content/80">
+          Chainlink&apos;s first round after expiry came at {shortExpiry(firstAfterExpiry.timestamp)}, more than{" "}
+          {Number(maxRoundLag) / 3600} hours late, so it cannot settle this market. A late price is not the price at
+          expiry.
         </p>
       )}
     </section>

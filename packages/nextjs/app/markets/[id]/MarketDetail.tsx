@@ -19,7 +19,7 @@ import { useScaffoldReadContract } from "~~/hooks/scaffold-hbar";
 import { bytes32ToFeedKey } from "~~/utils/markets/feeds";
 import { marketQuestion, shortExpiry } from "~~/utils/markets/question";
 import { deriveStatus, isRefund, resolutionLabel, sourceLabel, statusLabel } from "~~/utils/markets/status";
-import { type Market, MarketOutcome, MarketState } from "~~/utils/markets/types";
+import { type Market, MarketOutcome, MarketState, PriceSource } from "~~/utils/markets/types";
 import { formatExactPrice } from "~~/utils/markets/units";
 
 /** Market detail: headline, odds, chart, stake, settlement timeline, activity and redeem. */
@@ -68,8 +68,17 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
     );
   }
 
-  const status = config ? deriveStatus(market, nowSec, config) : "open";
-  const roundAvailable = settlementRound?.[0] === true;
+  // Undefined until the contract answers, so the status never claims a round it has not confirmed.
+  const roundEligible = settlementRound === undefined ? undefined : settlementRound[0];
+  const roundAvailable = roundEligible === true;
+  const status = config ? deriveStatus(market, nowSec, config, roundEligible) : "open";
+  // The round the chart marks: the one the market settled on, or the one settle() would use now.
+  const settlementTime =
+    market.state === MarketState.Settled && market.source === PriceSource.Chainlink
+      ? market.settlementTime
+      : roundAvailable
+        ? settlementRound?.[2]
+        : undefined;
 
   return (
     <div className="shell page">
@@ -120,6 +129,8 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
               feedLabel={feedLabel}
               expiry={market.expiry}
               expired={nowSec >= market.expiry}
+              settlementTime={settlementTime}
+              maxRoundLag={config?.maxRoundLag}
             />
           )}
           <SettlementTimeline marketId={Number(id)} market={market} roundAvailable={roundAvailable} />
@@ -127,7 +138,7 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
         </div>
         <div className="lg:col-span-4 order-first lg:order-none">
           <div className="lg:sticky lg:top-24 flex flex-col gap-4">
-            <StakePanel marketId={Number(id)} market={market} initialSide={initialSide} />
+            <StakePanel marketId={Number(id)} market={market} status={status} initialSide={initialSide} />
             <TradePanel market={market} />
             <RedeemPanel marketId={Number(id)} market={market} />
           </div>

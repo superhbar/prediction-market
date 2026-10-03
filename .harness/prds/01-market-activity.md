@@ -77,5 +77,5 @@ This is an increment on an existing, working template. Do not rebuild or restyle
 2. `packages/nextjs/utils/markets/activity.test.ts` covers every entry kind with fixture logs
    (encode them with viem `encodeEventTopics` and `encodeAbiParameters`), the refund variant of
    `MarketSettled`, and an undecodable log that is skipped.
-3. `/markets/0` on the shipped testnet deployment shows the real history of market 0 (see the
+3. `/markets/9` on the shipped testnet deployment shows the real history of market 9 (see the
    acceptance contract).

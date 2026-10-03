@@ -30,6 +30,11 @@ function closedNote(market: Market, status: UiStatus): { tone: "warning" | "neut
       return { tone: "neutral", text: "Expired. Settles on its own from the first Chainlink price after expiry." };
     case "settle-available":
       return { tone: "warning", text: "Expired. Anyone can settle once a Chainlink round is in." };
+    case "no-price":
+      return {
+        tone: "warning",
+        text: "Chainlink published no price within 2 hours of expiry. It settles with Pyth, or voids for 1:1 refunds.",
+      };
     case "voidable":
       return { tone: "warning", text: "No price in time. Anyone can void it for 1:1 refunds." };
     default:

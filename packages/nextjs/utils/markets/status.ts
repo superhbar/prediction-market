@@ -1,20 +1,25 @@
 import { type Market, type MarketConfig, MarketOutcome, MarketState, type UiStatus } from "./types";
 
 /** Minimum config fields needed to derive a market status. */
-export type StatusConfig = Pick<MarketConfig, "settlementDelay" | "gracePeriod" | "maxRetries">;
+export type StatusConfig = Pick<MarketConfig, "settlementDelay" | "gracePeriod" | "maxRetries" | "maxRoundLag">;
 
 /**
- * Derives the UI status for a market from its on-chain record, the current
- * unix time and the contract config. Pure: no chain reads.
+ * Derives the UI status for a market from its on-chain record, the current unix time and the contract config.
+ * Pure: no chain reads. `roundAvailable` is the contract's own `chainlinkSettlementRound` answer when the caller
+ * has it (the market page); without it (the list), the status falls back to timing alone.
  */
-export function deriveStatus(market: Market, nowSec: bigint, config: StatusConfig): UiStatus {
+export function deriveStatus(market: Market, nowSec: bigint, config: StatusConfig, roundAvailable?: boolean): UiStatus {
   if (market.state === MarketState.Voided) return "voided";
   if (market.state === MarketState.Settled) return "settled";
   if (market.outcome !== MarketOutcome.Unresolved) return "settled";
   if (nowSec < market.expiry) return "open";
   if (nowSec >= market.expiry + config.gracePeriod) return "voidable";
-  // Retrying only while a self-booked retry is still pending; once retries run out, anyone can settle.
+  // Resolving only while a self-booked retry is still pending; once retries run out, anyone can settle.
   if (market.retriesLeft < config.maxRetries && market.schedulePending) return "retrying";
+  if (roundAvailable === true) return "settle-available";
+  // Past maxRoundLag no later Chainlink round can qualify: only the Pyth fallback or a void remain.
+  if (nowSec >= market.expiry + config.maxRoundLag) return "no-price";
+  if (roundAvailable === false) return "awaiting-settlement";
   if (nowSec >= market.expiry + config.settlementDelay) return "settle-available";
   return "awaiting-settlement";
 }
@@ -31,6 +36,7 @@ export function matchesFilter(status: UiStatus, filter: MarketFilter): boolean {
       status === "awaiting-settlement" ||
       status === "retrying" ||
       status === "settle-available" ||
+      status === "no-price" ||
       status === "voidable"
     );
   }
@@ -49,6 +55,8 @@ export function statusLabel(status: UiStatus): string {
       return "Resolving";
     case "settle-available":
       return "Settle available";
+    case "no-price":
+      return "No oracle price";
     case "settled":
       return "Settled";
     case "voidable":

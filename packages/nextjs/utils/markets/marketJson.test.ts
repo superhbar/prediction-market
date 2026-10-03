@@ -3,7 +3,7 @@ import { marketToJson } from "./marketJson";
 import type { Market } from "./types";
 import { describe, expect, it } from "vitest";
 
-const config = { settlementDelay: 600n, gracePeriod: 86_400n, maxRetries: 4 };
+const config = { settlementDelay: 600n, gracePeriod: 86_400n, maxRetries: 4, maxRoundLag: 7_200n };
 
 const settledYes: Market = {
   feedKey: feedKeyToBytes32("HBAR/USD"),

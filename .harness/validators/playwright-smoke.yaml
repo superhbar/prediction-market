@@ -13,7 +13,7 @@ routes:
   - name: markets
     path: /
   - name: market-detail
-    path: /markets/0
+    path: /markets/9
   - name: create
     path: /markets/new
   - name: portfolio

@@ -59,7 +59,7 @@ export function SettlementTimeline({ marketId, market, roundAvailable }: Settlem
     disableSimulate: true,
   });
 
-  const status = config === undefined ? "awaiting-settlement" : deriveStatus(market, nowSec, config);
+  const status = config === undefined ? "awaiting-settlement" : deriveStatus(market, nowSec, config, roundAvailable);
   const expired = nowSec >= market.expiry;
   // The contract opens the Pyth fallback only after maxRoundLag, and only when Chainlink has no eligible round.
   const pythWindowOpen = config !== undefined && nowSec >= market.expiry + config.maxRoundLag;

@@ -8,7 +8,7 @@ import { useScaffoldWriteContract, useTargetNetwork } from "~~/hooks/scaffold-hb
 import { longZeroToEntityId, mirrorBaseForChain } from "~~/utils/markets/hashscan";
 import { fetchAccount, fetchAccountExists, fetchIsTokenAssociated } from "~~/utils/markets/mirror";
 import { isRefund } from "~~/utils/markets/status";
-import { type Market, MarketState } from "~~/utils/markets/types";
+import { type Market, MarketState, type UiStatus } from "~~/utils/markets/types";
 import {
   GAS,
   formatHbar,
@@ -22,6 +22,8 @@ import { notification } from "~~/utils/scaffold-hbar";
 type StakePanelProps = {
   marketId: number;
   market: Market;
+  /** Derived status, so the closed state can say what the market is waiting for. */
+  status: UiStatus;
   /** Side selected on first render, from the market card's Stake Yes or Stake No link. */
   initialSide?: "YES" | "NO";
 };
@@ -29,7 +31,7 @@ type StakePanelProps = {
 type Association = "checking" | "ok" | "needs-association" | "unknown";
 
 /** Stake YES/NO with a projected payout, association check and explicit gas. */
-export function StakePanel({ marketId, market, initialSide = "YES" }: StakePanelProps) {
+export function StakePanel({ marketId, market, status, initialSide = "YES" }: StakePanelProps) {
   const { address: account } = useAccount();
   const { targetNetwork } = useTargetNetwork();
   const [side, setSide] = useState<"YES" | "NO">(initialSide);
@@ -131,7 +133,9 @@ export function StakePanel({ marketId, market, initialSide = "YES" }: StakePanel
             ? "Every position in this market redeems 1:1 for the HBAR staked."
             : market.state === MarketState.Settled
               ? "This market is resolved. Winning tokens redeem for a share of the whole pool."
-              : "Waiting for the oracle. The first Chainlink price published after expiry decides the outcome, and the market settles itself when it arrives. Until then YES and NO tokens can still change hands on SaucerSwap."}
+              : status === "no-price" || status === "voidable"
+                ? "Chainlink published no price within 2 hours of expiry, so this market cannot settle on Chainlink. It settles with the first Pyth price after expiry, or anyone can void it after the grace period for 1:1 refunds."
+                : "Waiting for the oracle. The first Chainlink price published after expiry decides the outcome, and the market settles itself when it arrives. Until then YES and NO tokens can still change hands on SaucerSwap."}
         </p>
         <p className="text-sm text-base-content/60 mt-3 mb-0">
           {formatHbar(market.yesPool + market.noPool)} pooled: {formatHbar(market.yesPool)} on YES,{" "}

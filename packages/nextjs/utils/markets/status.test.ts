@@ -2,10 +2,11 @@ import { deriveStatus, isRefund, matchesFilter, resolutionLabel, statusLabel } f
 import type { Market, MarketConfig } from "./types";
 import { describe, expect, it } from "vitest";
 
-const config: Pick<MarketConfig, "settlementDelay" | "gracePeriod" | "maxRetries"> = {
+const config: Pick<MarketConfig, "settlementDelay" | "gracePeriod" | "maxRetries" | "maxRoundLag"> = {
   settlementDelay: 60n,
   gracePeriod: 86_400n,
   maxRetries: 2,
+  maxRoundLag: 7_200n,
 };
 
 function market(overrides: Partial<Market>): Market {
@@ -54,6 +55,20 @@ describe("deriveStatus", () => {
     );
   });
 
+  it("trusts the contract's round answer over timing when the caller has it", () => {
+    const idle = market({ retriesLeft: 0, schedulePending: false });
+    expect(deriveStatus(idle, 1_000_061n, config, true)).toBe("settle-available");
+    expect(deriveStatus(idle, 1_000_061n, config, false)).toBe("awaiting-settlement");
+  });
+
+  it("reports no-price once the round window has passed without an eligible round", () => {
+    const idle = market({ retriesLeft: 0, schedulePending: false });
+    expect(deriveStatus(idle, 1_007_200n, config)).toBe("no-price");
+    expect(deriveStatus(idle, 1_007_200n, config, false)).toBe("no-price");
+    // A round published inside the window can still be settled by hand after it closes.
+    expect(deriveStatus(idle, 1_007_200n, config, true)).toBe("settle-available");
+  });
+
   it("reports voidable after the grace period", () => {
     expect(deriveStatus(market({}), 1_086_401n, config)).toBe("voidable");
   });
@@ -69,6 +84,7 @@ describe("matchesFilter", () => {
     expect(matchesFilter("open", "open")).toBe(true);
     expect(matchesFilter("retrying", "awaiting")).toBe(true);
     expect(matchesFilter("voidable", "awaiting")).toBe(true);
+    expect(matchesFilter("no-price", "awaiting")).toBe(true);
     expect(matchesFilter("settled", "settled")).toBe(true);
     expect(matchesFilter("voided", "voided")).toBe(true);
     expect(matchesFilter("open", "settled")).toBe(false);

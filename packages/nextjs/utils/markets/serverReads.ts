@@ -19,13 +19,14 @@ export async function readMarkets(ids: (count: number) => number[]) {
   const read = <T>(functionName: string, args: readonly unknown[] = []) =>
     client.readContract({ address: contract.address, abi: contract.abi, functionName, args } as never) as Promise<T>;
 
-  const [count, settlementDelay, gracePeriod, maxRetries] = await Promise.all([
+  const [count, settlementDelay, gracePeriod, maxRetries, maxRoundLag] = await Promise.all([
     read<bigint>("marketCount"),
     read<bigint>("settlementDelay"),
     read<bigint>("gracePeriod"),
     read<number>("maxRetries"),
+    read<bigint>("maxRoundLag"),
   ]);
-  const config: StatusConfig = { settlementDelay, gracePeriod, maxRetries: Number(maxRetries) };
+  const config: StatusConfig = { settlementDelay, gracePeriod, maxRetries: Number(maxRetries), maxRoundLag };
   const selected = ids(Number(count)).filter(id => id >= 0 && id < Number(count));
   const markets = await Promise.all(
     selected.map(async id => ({
