@@ -142,9 +142,8 @@ export function useScaffoldWriteContract<TContractName extends ContractName>(
       const writeTxResult = await writeTx(makeWriteWithParams, {
         blockConfirmations,
         onBlockConfirmation: receipt => {
-          if (receipt.status === "success" && contractName === "PredictionMarkets") {
-            void refreshMarketReads(queryClient);
-          }
+          // Contract reads go stale after a confirmed write; refetch them instead of waiting for the next poll.
+          if (receipt.status === "success") void refreshMarketReads(queryClient);
           onBlockConfirmation?.(receipt);
         },
       });

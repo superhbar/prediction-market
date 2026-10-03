@@ -2,17 +2,15 @@
 
 import { useEffect, useState } from "react";
 
-/** Seconds since epoch, updated on the client so server and hydration renders agree. */
+/**
+ * Seconds since epoch, ticking once a second. Pages render market status only after their client-side reads
+ * resolve, so reading the clock in the initializer cannot cause a hydration mismatch.
+ */
 export function useNow(): bigint {
-  const [now, setNow] = useState(0n);
+  const [now, setNow] = useState(() => BigInt(Math.floor(Date.now() / 1000)));
   useEffect(() => {
-    const update = () => setNow(BigInt(Math.floor(Date.now() / 1000)));
-    const initial = setTimeout(update, 0);
-    const timer = setInterval(update, 1_000);
-    return () => {
-      clearTimeout(initial);
-      clearInterval(timer);
-    };
+    const timer = setInterval(() => setNow(BigInt(Math.floor(Date.now() / 1000))), 1_000);
+    return () => clearInterval(timer);
   }, []);
   return now;
 }

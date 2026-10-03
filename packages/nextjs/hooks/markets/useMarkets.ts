@@ -69,11 +69,12 @@ export function useMarkets(): {
     });
   }, [marketIds, results]);
 
+  // One unreadable market is skipped by the list; only a failure of every read is an error.
+  const allFailed = !!results && results.length > 0 && markets.every(market => market === null);
   const error =
     countError ??
     marketsError ??
-    batchReadError(results) ??
-    (results && markets.some(market => market === null) ? new Error("A market could not be decoded.") : null);
+    (allFailed ? (batchReadError(results) ?? new Error("Markets could not be read.")) : null);
 
   return {
     marketIds,
