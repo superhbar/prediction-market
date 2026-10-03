@@ -11,10 +11,7 @@ export function AssetBadge({ feedLabel, size = "md" }: { feedLabel: string; size
     <span aria-hidden className={`${box} relative shrink-0`}>
       <CoinIcon symbol={base} className="w-full h-full" />
       {quote && (
-        <CoinIcon
-          symbol={quote}
-          className={`${badge} absolute -right-0.5 -bottom-0.5 outline-2 outline-base-100`}
-        />
+        <CoinIcon symbol={quote} className={`${badge} absolute -right-0.5 -bottom-0.5 outline-2 outline-base-100`} />
       )}
     </span>
   );

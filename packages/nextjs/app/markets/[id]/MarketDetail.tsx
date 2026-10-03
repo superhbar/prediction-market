@@ -108,7 +108,13 @@ export function MarketDetail({ id, initialSide = "YES" }: { id: string; initialS
               <div className="h-56 rounded-xl bg-base-300 animate-pulse" />
             </div>
           ) : (
-            <PriceChart points={points} strike={market.strike} feedLabel={feedLabel} expiry={market.expiry} />
+            <PriceChart
+              points={points}
+              strike={market.strike}
+              feedLabel={feedLabel}
+              expiry={market.expiry}
+              expired={nowSec >= market.expiry}
+            />
           )}
           <SettlementTimeline marketId={Number(id)} market={market} roundAvailable={roundAvailable} />
           <ActivityPanel marketId={id} />

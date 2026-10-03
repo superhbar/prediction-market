@@ -8,6 +8,8 @@ type PriceChartProps = {
   feedLabel: string;
   /** Market expiry: the first round at or after it is the settlement round and gets a marker. */
   expiry?: bigint;
+  /** True once expiry has passed; the parent owns the clock so render stays pure. */
+  expired?: boolean;
 };
 
 const WIDTH = 720;
@@ -15,7 +17,7 @@ const HEIGHT = 240;
 const PAD = 12;
 
 /** Inline SVG line chart from Chainlink rounds with a dashed strike line. No chart library. */
-export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProps) {
+export function PriceChart({ points, strike, feedLabel, expiry, expired }: PriceChartProps) {
   if (points.length === 0) {
     return (
       <div className="panel p-5">
@@ -48,7 +50,7 @@ export function PriceChart({ points, strike, feedLabel, expiry }: PriceChartProp
   const strikeLabelY = strikeY < PAD + 16 ? strikeY + 18 : strikeY - 8;
   const settleIndex = expiry === undefined ? -1 : points.findIndex(point => point.timestamp >= expiry);
   // Expired, but the feed has not published since: the price above is not the settlement price.
-  const waitingForRound = expiry !== undefined && settleIndex < 0 && BigInt(Math.floor(Date.now() / 1000)) >= expiry;
+  const waitingForRound = expired === true && settleIndex < 0;
   // Near the right edge the marker label flips to the left of its line so it is not clipped.
   const settleLabelLeft = settleIndex >= 0 && x(settleIndex) > WIDTH * 0.7;
 
