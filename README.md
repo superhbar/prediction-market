@@ -181,6 +181,10 @@ Pair paths use the WHBAR token `0.0.15058`; the router's `WHBAR()` returns the w
 
 Staking is parimutuel, not an order book: one position token is minted per HBAR staked, whatever the pool split, and winners share the whole pool. Payout equals `amount * totalPool / winningPool`, quoted on chain by `quotePayout`. Worked example from market 0 on testnet (5 HBAR staked on YES, 3 HBAR on NO, settled YES): the YES staker redeemed 5 * 8 / 5 = 8 HBAR and the NO stake paid 0. If only one side has stakes, or the market is voided, every position redeems 1:1 for the HBAR staked.
 
+![Payouts for market 0: the YES staker redeems 8 HBAR if YES wins, the NO staker 8 if NO wins, and both get their stake back on a void. A YES token pays total pool divided by YES pool, 1.6x for market 0, and the multiple falls as more HBAR joins the winning side.](docs/img/payoff.svg)
+
+A position token is not a fixed 1 HBAR claim: its value at settlement depends on how the pool ends up split. That is why the stake panel labels its "pays if this side wins" figure as an estimate, and why a SaucerSwap price for a token can sit above 1 HBAR.
+
 ### Units (tinybar vs weibar)
 
 Wallets and JSON-RPC send weibar (18 decimals). Inside the EVM, `msg.value` and balances are tinybar (8 decimals); the relay converts. The contract never rescales. The frontend converts at one boundary in `packages/nextjs/utils/markets/units.ts`: it sends value with `parseEther(hbar)` and formats contract amounts with 8 decimals.
@@ -194,6 +198,43 @@ The network bills the contract for scheduled executions (a settle measured 127k 
 If someone settles a market by hand before its booked schedule fires, the schedule still runs later and is still billed. So while a schedule is pending (`schedulePending`), `withdrawReserve` keeps one execution's cost (0.5 HBAR) in the reserve; the scheduled call returns quietly on a closed market, pays for itself from that holdback, and the creator can withdraw anything left afterwards.
 
 ## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Browser["Next.js app (browser)"]
+        UI["Market pages<br/>Stake, Trade, Settle, Redeem"]
+    end
+    subgraph Server["Next.js server routes"]
+        PythProxy["/api/pyth<br/>Hermes proxy, key stays here"]
+    end
+    subgraph Hedera["Hedera testnet"]
+        Relay["JSON-RPC relay (Hashio)"]
+        PM["PredictionMarkets.sol<br/>all markets, no owner"]
+        HTS["HTS 0x167<br/>YES and NO tokens"]
+        HSS["Schedule Service 0x16b<br/>settle and retries"]
+        Rate["Exchange rate 0x168"]
+        CL["Chainlink feeds<br/>HBAR, BTC, ETH"]
+        PythC["Pyth contract"]
+        SS["SaucerSwap V1<br/>router and pairs"]
+        Mirror["Mirror node REST"]
+    end
+    Hermes["Pyth Hermes"]
+
+    UI -->|"wallet transactions"| Relay
+    Relay --> PM
+    Relay --> SS
+    PM -->|"create, mint, wipe"| HTS
+    PM -->|"book settle"| HSS
+    HSS -->|"scheduled CALL settle()"| PM
+    PM -->|"walk rounds"| CL
+    PM -->|"settleWithPyth"| PythC
+    SS -->|"pool fee in HBAR"| Rate
+    SS -->|"swap position tokens"| HTS
+    UI -->|"events, schedules, balances, rates"| Mirror
+    UI --> PythProxy --> Hermes
+```
+
+The contract talks to three Hedera system contracts and two oracles; the browser only needs the relay, the mirror node and, for the Pyth fallback, the server route. SaucerSwap sits beside the contract rather than inside it: the contract never calls the DEX, so a pool problem cannot block settlement or redeem.
 
 ```text
 packages/foundry/
@@ -216,19 +257,22 @@ packages/nextjs/
   app/markets/[id]/page.tsx         Market detail: pools, odds, countdowns, stake, settle, void, redeem
   app/portfolio/page.tsx            Positions across markets
   app/api/pyth/route.ts             Server-only Hermes proxy; PYTH_API_KEY never reaches the browser
-  components/markets/               MarketCard, StakePanel, RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, ui (shared badges and bars)
+  components/markets/               MarketCard, StakePanel, TradePanel (SaucerSwap), RedeemPanel, OddsBar, Countdown, PriceChart, SettlementTimeline, ActivityPanel, States, ui (shared badges and bars)
   styles/globals.css                Both daisyUI themes and the YES/NO colors: the whole look in one file
   utils/brand.ts                    App name, description and the theme colors that CSS cannot reach
-  hooks/markets/                    useMarket, useMarkets, usePositions, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate, useMarketActivity
+  hooks/markets/                    useMarket, useMarkets, usePositions, useSaucerPool, useAccountExists, useMarketConfig, useChainlinkHistory, useScheduleStatus, useFeedInfo, useCreationEstimate, useMarketActivity
   hooks/scaffold-hbar/              Scaffold read, write, event, and transactor hooks
   utils/markets/units.ts            The single tinybar and weibar conversion boundary, plus frontend gas limits
   utils/markets/feeds.ts            Feed keys and bytes32 conversion
-  utils/markets/status.ts           Derives UI status (open, awaiting-settlement, retrying, settle-available, voidable, settled, voided)
+  utils/markets/saucerswap.ts       SaucerSwap V1 addresses, ABIs, pool price and slippage helpers
+  utils/markets/status.ts           Derives UI status (open, awaiting-settlement, retrying (shown as Resolving), settle-available, voidable, settled, voided)
   utils/markets/mirror.ts           Mirror node REST reads (exchange rate, account, token association, schedule status, contract logs)
   utils/markets/activity.ts         Decodes PredictionMarkets event logs into the activity panel rows
   utils/markets/hashscan.ts         Hashscan and entity id link builders
 .harness/                           Harness recipe: spec, PRDs, validators (see Using Hedera Harness)
-docs/hedera-notes.md                Hedera behaviour measured on testnet (units, HTS, HIP-1215, oracles, tooling)
+docs/hedera-notes.md                Hedera behaviour measured on testnet (units, HTS, HIP-1215, oracles, SaucerSwap, tooling)
+docs/TUTORIAL.md                    Worked extension: add a creator fee from contract to deploy
+docs/img/payoff.svg                 Payout diagram used in How payouts work
 docs/screenshots/                   Screenshots of the production build against the testnet deployment
 ```
 
@@ -293,6 +337,8 @@ Common changes:
 - Other assets: add a feed (see Add a price feed below). The question wording comes from `marketQuestion` in `packages/nextjs/utils/markets/question.ts`.
 
 ## Extending the template
+
+[docs/TUTORIAL.md](docs/TUTORIAL.md) walks one extension end to end: scaffold, follow a market through its life, add a 1% creator fee across contract, config, tests and frontend, then deploy and prove it on testnet. The recipes below are the short versions.
 
 ### Add a price feed
 

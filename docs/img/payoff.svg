@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 380" width="880" height="380" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" role="img" aria-labelledby="t d">
+<title id="t">Predera parimutuel payouts</title><desc id="d">Left: what each staker in market 0 redeems for each outcome. Right: payout per HBAR staked on YES as a function of the YES share of the pool.</desc>
+<rect width="880" height="380" rx="14" fill="#ffffff" stroke="#e5e7eb"/>
+<text x="40" y="36" font-size="15" font-weight="700" fill="#1f2937">Who redeems what: 5 HBAR on YES, 3 HBAR on NO</text>
+<line x1="60" x2="410" y1="100" y2="100" stroke="#e5e7eb"/>
+<text x="52" y="104" font-size="11" text-anchor="end" fill="#6b7280">8</text>
+<line x1="60" x2="410" y1="200" y2="200" stroke="#e5e7eb"/>
+<text x="52" y="204" font-size="11" text-anchor="end" fill="#6b7280">4</text>
+<line x1="60" x2="410" y1="300" y2="300" stroke="#e5e7eb"/>
+<text x="52" y="304" font-size="11" text-anchor="end" fill="#6b7280">0</text>
+<text x="20" y="190" font-size="11" fill="#6b7280" transform="rotate(-90 20 190)" text-anchor="middle">HBAR redeemed</text>
+<rect x="80" y="100" width="36" height="200" rx="3" fill="#16a34a"/>
+<text x="98" y="94" font-size="12" font-weight="600" text-anchor="middle" fill="#1f2937">8</text>
+<rect x="124" y="298" width="36" height="2" rx="3" fill="#dc2626"/>
+<text x="142" y="292" font-size="12" font-weight="600" text-anchor="middle" fill="#1f2937">0</text>
+<text x="120" y="320" font-size="12" text-anchor="middle" fill="#1f2937">YES wins</text>
+<rect x="195" y="298" width="36" height="2" rx="3" fill="#16a34a"/>
+<text x="213" y="292" font-size="12" font-weight="600" text-anchor="middle" fill="#1f2937">0</text>
+<rect x="239" y="100" width="36" height="200" rx="3" fill="#dc2626"/>
+<text x="257" y="94" font-size="12" font-weight="600" text-anchor="middle" fill="#1f2937">8</text>
+<text x="235" y="320" font-size="12" text-anchor="middle" fill="#1f2937">NO wins</text>
+<rect x="310" y="175" width="36" height="125" rx="3" fill="#16a34a"/>
+<text x="328" y="169" font-size="12" font-weight="600" text-anchor="middle" fill="#1f2937">5</text>
+<rect x="354" y="225" width="36" height="75" rx="3" fill="#dc2626"/>
+<text x="372" y="219" font-size="12" font-weight="600" text-anchor="middle" fill="#1f2937">3</text>
+<text x="350" y="320" font-size="12" text-anchor="middle" fill="#1f2937">Void or one-sided</text>
+<rect x="80" y="338" width="12" height="12" rx="2" fill="#16a34a"/><text x="98" y="349" font-size="12" fill="#1f2937">YES staker (5 tokens)</text>
+<rect x="250" y="338" width="12" height="12" rx="2" fill="#dc2626"/><text x="268" y="349" font-size="12" fill="#1f2937">NO staker (3 tokens)</text>
+<line x1="440" x2="440" y1="24" y2="356" stroke="#e5e7eb"/>
+<text x="470" y="36" font-size="15" font-weight="700" fill="#1f2937">HBAR paid per YES token if YES wins</text>
+<line x1="510" x2="840" y1="300" y2="300" stroke="#e5e7eb"/>
+<text x="502" y="304" font-size="11" text-anchor="end" fill="#6b7280">0x</text>
+<line x1="510" x2="840" y1="254" y2="254" stroke="#e5e7eb"/>
+<text x="502" y="258" font-size="11" text-anchor="end" fill="#6b7280">1x</text>
+<line x1="510" x2="840" y1="208" y2="208" stroke="#e5e7eb"/>
+<text x="502" y="212" font-size="11" text-anchor="end" fill="#6b7280">2x</text>
+<line x1="510" x2="840" y1="162" y2="162" stroke="#e5e7eb"/>
+<text x="502" y="166" font-size="11" text-anchor="end" fill="#6b7280">3x</text>
+<line x1="510" x2="840" y1="116" y2="116" stroke="#e5e7eb"/>
+<text x="502" y="120" font-size="11" text-anchor="end" fill="#6b7280">4x</text>
+<line x1="510" x2="840" y1="70" y2="70" stroke="#e5e7eb"/>
+<text x="502" y="74" font-size="11" text-anchor="end" fill="#6b7280">5x</text>
+<text x="510" y="318" font-size="11" text-anchor="middle" fill="#6b7280">0%</text>
+<text x="592.5" y="318" font-size="11" text-anchor="middle" fill="#6b7280">25%</text>
+<text x="675.0" y="318" font-size="11" text-anchor="middle" fill="#6b7280">50%</text>
+<text x="757.5" y="318" font-size="11" text-anchor="middle" fill="#6b7280">75%</text>
+<text x="840" y="318" font-size="11" text-anchor="middle" fill="#6b7280">100%</text>
+<text x="675.0" y="336" font-size="12" text-anchor="middle" fill="#1f2937">YES share of the pool at settlement</text>
+<polyline points="576.0,70.0 579.3,81.0 582.6,90.9 585.9,100.0 589.2,108.3 592.5,116.0 595.8,123.1 599.1,129.6 602.4,135.7 605.7,141.4 609.0,146.7 612.3,151.6 615.6,156.3 618.9,160.6 622.2,164.7 625.5,168.6 628.8,172.2 632.1,175.7 635.4,178.9 638.7,182.1 642.0,185.0 645.3,187.8 648.6,190.5 651.9,193.0 655.2,195.5 658.5,197.8 661.8,200.0 665.1,202.1 668.4,204.2 671.7,206.1 675.0,208.0 678.3,209.8 681.6,211.5 684.9,213.2 688.2,214.8 691.5,216.4 694.8,217.9 698.1,219.3 701.4,220.7 704.7,222.0 708.0,223.3 711.3,224.6 714.6,225.8 717.9,227.0 721.2,228.1 724.5,229.2 727.8,230.3 731.1,231.3 734.4,232.4 737.7,233.3 741.0,234.3 744.3,235.2 747.6,236.1 750.9,237.0 754.2,237.8 757.5,238.7 760.8,239.5 764.1,240.3 767.4,241.0 770.7,241.8 774.0,242.5 777.3,243.2 780.6,243.9 783.9,244.6 787.2,245.2 790.5,245.9 793.8,246.5 797.1,247.1 800.4,247.7 803.7,248.3 807.0,248.9 810.3,249.5 813.6,250.0 816.9,250.5 820.2,251.1 823.5,251.6 826.8,252.1 830.1,252.6 833.4,253.1 836.7,253.5 840.0,254.0" fill="none" stroke="#16a34a" stroke-width="3"/>
+<line x1="510" x2="840" y1="254" y2="254" stroke="#6b7280" stroke-dasharray="5 4"/>
+<text x="519.9" y="248" font-size="11" fill="#6b7280">1x: stake back</text>
+<circle cx="716.25" cy="226.39999999999998" r="6" fill="#7c3aed"/>
+<text x="726.25" y="214.39999999999998" font-size="12" font-weight="600" fill="#7c3aed">market 0: pays 1.6x</text>
+<text x="589.2" y="88.4" font-size="12" fill="#1f2937">payout = stake x total pool / winning pool</text>
+<text x="589.2" y="104.4" font-size="12" fill="#6b7280">More stake on your side later lowers your multiple.</text>
+</svg>
