@@ -206,7 +206,7 @@ function processAllDeployments(broadcastPath) {
   return allContracts;
 }
 
-function main() {
+async function main() {
   const current_path_to_broadcast = join(__dirname, "..", "broadcast");
   const current_path_to_deployments = join(__dirname, "..", "deployments");
 
@@ -286,9 +286,10 @@ function main() {
     export default deployedContracts satisfies GenericContractsDeclaration;
   `;
 
+  // Prettier 3 formats asynchronously.
   writeFileSync(
     join(NEXTJS_TARGET_DIR, "deployedContracts.ts"),
-    format(fileTemplate("~~/utils/scaffold-hbar/contract"), {
+    await format(fileTemplate("~~/utils/scaffold-hbar/contract"), {
       parser: "typescript",
     }),
   );
@@ -301,9 +302,7 @@ function main() {
   );
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   console.error("Error:", error);
   process.exitCode = 1;
-}
+});
