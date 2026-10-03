@@ -20,9 +20,8 @@ type MarketCardProps = {
 function closedNote(market: Market, status: UiStatus): { tone: "warning" | "neutral"; text: string } {
   switch (status) {
     case "awaiting-settlement":
-      return { tone: "warning", text: "Expired. Hedera runs the scheduled settlement shortly." };
     case "retrying":
-      return { tone: "warning", text: "Expired. Settlement is waiting for the first Chainlink round after expiry." };
+      return { tone: "neutral", text: "Expired. Settles on its own from the first Chainlink price after expiry." };
     case "settle-available":
       return { tone: "warning", text: "Expired. Anyone can settle once a Chainlink round is in." };
     case "voidable":
@@ -124,7 +123,7 @@ export function MarketCard({ marketId, market, status, points = [] }: MarketCard
 export const FILTERS: { value: MarketFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "open", label: "Open" },
-  { value: "awaiting", label: "Settling" },
+  { value: "awaiting", label: "Resolving" },
   { value: "settled", label: "Settled" },
   { value: "voided", label: "Voided" },
 ];

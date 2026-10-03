@@ -43,10 +43,10 @@ export function statusLabel(status: UiStatus): string {
   switch (status) {
     case "open":
       return "Open";
+    // Both are the contract working on its own; retries are a detail the settlement timeline explains.
     case "awaiting-settlement":
-      return "Awaiting settlement";
     case "retrying":
-      return "Retrying";
+      return "Resolving";
     case "settle-available":
       return "Settle available";
     case "settled":

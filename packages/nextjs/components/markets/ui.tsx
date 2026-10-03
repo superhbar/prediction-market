@@ -17,7 +17,7 @@ export function AssetBadge({ feedLabel, size = "md" }: { feedLabel: string; size
   );
 }
 
-function CoinIcon({ symbol, className }: { symbol: string; className: string }) {
+export function CoinIcon({ symbol, className }: { symbol: string; className: string }) {
   const src = ASSET_ICONS[symbol];
   if (!src) {
     return (
@@ -33,8 +33,8 @@ function CoinIcon({ symbol, className }: { symbol: string; className: string }) 
 
 const STATUS_COLOR: Record<UiStatus, string> = {
   open: "text-success",
-  "awaiting-settlement": "text-warning",
-  retrying: "text-warning",
+  "awaiting-settlement": "text-info",
+  retrying: "text-info",
   "settle-available": "text-info",
   voidable: "text-error",
   settled: "text-primary",

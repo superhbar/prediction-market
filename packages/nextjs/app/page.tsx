@@ -5,6 +5,7 @@ import Link from "next/link";
 import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { FILTERS, MarketCard } from "~~/components/markets/MarketCard";
 import { EmptyState, ErrorState, MarketCardSkeleton } from "~~/components/markets/States";
+import { CoinIcon } from "~~/components/markets/ui";
 import { type PricePoint, useChainlinkHistory } from "~~/hooks/markets/useChainlinkHistory";
 import { useMarketConfig } from "~~/hooks/markets/useMarketConfig";
 import { useMarkets } from "~~/hooks/markets/useMarkets";
@@ -60,19 +61,20 @@ const Home = () => {
   );
 
   const nowSec = useNow();
-  const visible = useMemo(() => {
+  // Markets that match the asset and search; the status tabs count and filter within these.
+  const matching = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return marketIds.flatMap((id, index) => {
       const market = markets[index];
       if (!market) return [];
       const feed = bytes32ToFeedKey(market.feedKey);
-      const status = config ? deriveStatus(market, nowSec, config) : "open";
-      if (!matchesFilter(status, filter)) return [];
       if (asset !== "all" && feed !== asset) return [];
       if (needle && !marketQuestion(feed, market.strike, market.expiry).toLowerCase().includes(needle)) return [];
+      const status = config ? deriveStatus(market, nowSec, config) : "open";
       return [{ id, market, feed, status }];
     });
-  }, [marketIds, markets, config, nowSec, filter, asset, query]);
+  }, [marketIds, markets, config, nowSec, asset, query]);
+  const visible = matching.filter(entry => matchesFilter(entry.status, filter));
 
   return (
     <div className="shell page">
@@ -97,25 +99,34 @@ const Home = () => {
         ))}
       </p>
 
-      <div className="mt-6 flex flex-wrap items-center gap-2">
-        <div role="tablist" aria-label="Asset" className="flex gap-1">
-          {["all", ...FEED_KEYS].map(feed => (
-            <button
-              key={feed}
-              role="tab"
-              aria-selected={asset === feed}
-              onClick={() => setAsset(feed)}
-              className={`rounded-full border px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-                asset === feed
-                  ? "border-base-content bg-base-content text-base-200"
-                  : "border-base-300 text-base-content/60 hover:text-base-content"
-              }`}
-            >
-              {feed === "all" ? "All assets" : feed.split("/")[0]}
-            </button>
-          ))}
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div
+          role="tablist"
+          aria-label="Status"
+          className="flex max-w-full overflow-x-auto rounded-xl border border-base-300 p-1"
+        >
+          {FILTERS.map(entry => {
+            const selected = filter === entry.value;
+            const total = matching.filter(item => matchesFilter(item.status, entry.value)).length;
+            return (
+              <button
+                key={entry.value}
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setFilter(entry.value)}
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3.5 py-1.5 text-[13.5px] font-semibold transition-colors ${
+                  selected ? "bg-base-100 text-base-content" : "text-base-content/60 hover:text-base-content"
+                }`}
+              >
+                {entry.label}
+                <span className={`text-xs tabular-nums ${selected ? "text-base-content/60" : "text-base-content/40"}`}>
+                  {total}
+                </span>
+              </button>
+            );
+          })}
         </div>
-        <label className="ml-auto flex w-full sm:w-72 items-center gap-2 rounded-[10px] border border-base-300 px-3 h-9 focus-within:border-primary">
+        <label className="ml-auto flex w-full sm:w-72 items-center gap-2 rounded-xl border border-base-300 px-3 h-[42px] focus-within:border-primary">
           <MagnifyingGlassIcon className="w-4 h-4 text-base-content/50" aria-hidden />
           <input
             value={query}
@@ -127,22 +138,29 @@ const Home = () => {
         </label>
       </div>
 
-      <div role="tablist" aria-label="Status" className="mt-4 flex gap-5 overflow-x-auto border-b border-base-300">
-        {FILTERS.map(entry => (
-          <button
-            key={entry.value}
-            role="tab"
-            aria-selected={filter === entry.value}
-            onClick={() => setFilter(entry.value)}
-            className={`-mb-px whitespace-nowrap border-b-2 pb-2.5 text-sm font-semibold transition-colors ${
-              filter === entry.value
-                ? "border-primary text-base-content"
-                : "border-transparent text-base-content/55 hover:text-base-content"
-            }`}
-          >
-            {entry.label}
-          </button>
-        ))}
+      <div role="tablist" aria-label="Asset" className="mt-3 flex flex-wrap gap-2">
+        {["all", ...FEED_KEYS].map(feed => {
+          const selected = asset === feed;
+          const symbol = feed.split("/")[0];
+          return (
+            <button
+              key={feed}
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setAsset(feed)}
+              className={`flex items-center gap-1.5 rounded-full border py-1 text-[13px] font-semibold transition-colors ${
+                feed === "all" ? "px-3" : "pl-1 pr-3"
+              } ${
+                selected
+                  ? "border-primary/60 bg-primary/15 text-base-content"
+                  : "border-base-300 text-base-content/60 hover:text-base-content"
+              }`}
+            >
+              {feed !== "all" && <CoinIcon symbol={symbol} className="w-5 h-5" />}
+              {feed === "all" ? "All assets" : symbol}
+            </button>
+          );
+        })}
       </div>
 
       <div className="mt-5">
