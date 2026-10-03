@@ -188,7 +188,7 @@ describe("decodeActivity", () => {
     expect(entry.label).toBe("Voided");
   });
 
-  it("decodes Redeemed with amount, side and payout in HBAR", () => {
+  it("decodes Redeemed with the token amount, side and HBAR payout", () => {
     const [entry] = decodeActivity(
       [
         makeLog(
@@ -205,7 +205,7 @@ describe("decodeActivity", () => {
       ],
       predictionMarketsAbi,
     );
-    expect(entry.label).toBe("Redeemed 3 HBAR NO for 4.8 HBAR");
+    expect(entry.label).toBe("Redeemed 3 NO for 4.8 HBAR");
     expect(entry.account?.toLowerCase()).toBe(TRADER);
   });
 

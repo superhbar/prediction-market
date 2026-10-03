@@ -18,7 +18,7 @@ One contract, `PredictionMarkets.sol`, holds every market. It creates two HTS to
 
 The Next.js app has a market list, a create form that defaults the strike to the live Chainlink price, a market page (pool split, price chart, stake panel, settlement timeline, activity log with Hashscan links, redeem) and a portfolio page.
 
-Around it: 111 Foundry unit tests plus 5 invariants checked over random multi-market action sequences (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 242/242 lines, 90% branches), 77 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
+Around it: 111 Foundry unit tests plus 5 invariants checked over random multi-market action sequences (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 242/242 lines, 90% branches), 83 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
 
 ## What you get that is hard to build alone
 
@@ -28,7 +28,7 @@ Around it: 111 Foundry unit tests plus 5 invariants checked over random multi-ma
 - **Accounting you can audit.** Payouts come only from recorded pools, a fuzz test proves winners never receive more than the pool, and `withdrawReserve` can only pay out surplus beyond what traders and other markets are owed. A scheduled call never reverts on a handled path, because Hedera bills a reverted scheduled execution anyway.
 - **Positions you can trade before settlement.** YES and NO are ordinary HTS tokens, so the market page opens a SaucerSwap V1 pool for either side and buys or sells against it, with quotes from the router and a 1% slippage floor. The pool fee is priced in dollars through Hedera's exchange-rate system contract, and the e2e script opens a pool, buys and sells on testnet. See [Trading before settlement](#trading-before-settlement-saucerswap).
 - **Hedera details already measured.** [docs/hedera-notes.md](docs/hedera-notes.md) records what was measured on testnet: tinybar inside the EVM vs weibar in wallets, the 0.65 HBAR first-stake association cost, scheduled-call gas and billing, why `forge script --broadcast` cannot reach Hashio, and the mirror node log filter that silently matches nothing.
-- **Proof at every level.** 111 Foundry unit tests with 100% line coverage of the production contracts, 5 accounting invariants checked over 25,600 random actions per run, 77 vitest tests, an end-to-end script that runs create, stake, a SaucerSwap pool and trade, scheduled settlement, redeem and reserve withdrawal on real testnet, source verified on Sourcify, CI that scaffolds the template fresh with both npm and yarn, then lints, tests, builds, boots it and requests every core route, and a [live demo](https://predera.vercel.app).
+- **Proof at every level.** 111 Foundry unit tests with 100% line coverage of the production contracts, 5 accounting invariants checked over 25,600 random actions per run, 83 vitest tests, an end-to-end script that runs create, stake, a SaucerSwap pool and trade, scheduled settlement, redeem and reserve withdrawal on real testnet, source verified on Sourcify, CI that scaffolds the template fresh with both npm and yarn, then lints, tests, builds, boots it and requests every core route, and a [live demo](https://predera.vercel.app).
 - **Ready for coding agents.** `AGENTS.md` lists the invariants an agent must not break, and `.harness/` ships a Hedera Harness recipe whose validators pass in freshly scaffolded npm and yarn projects. The market activity panel was built through that recipe.
 
 ## Quick start
@@ -335,24 +335,28 @@ yarn next:build
 
 Live deployment: `PredictionMarkets` at `0x2528B83f1B73780a226838039376cc1435b5F289` ([Hashscan](https://hashscan.io/testnet/contract/0x2528B83f1B73780a226838039376cc1435b5F289)), source verified on Sourcify (exact match). It checks for a settlement price 4 times after the first scheduled call, 30 minutes apart, and ships with demo markets on HBAR, BTC and ETH, several with SaucerSwap pools.
 
-Market 9 on the previous deployment `0x45F344b4...AcED` (the same contract before schedule-capacity probing) is the latest completed run of `yarn foundry:e2e:testnet` (2026-10-03). The HBAR/USD feed was quiet after expiry, so the market booked two retries on its own and the second one settled it:
+Market 0 is the latest full run of `yarn foundry:e2e:testnet` (2026-10-03). The HBAR/USD feed was quiet after expiry, so the market booked two retries on its own and the second one settled it:
 
 | Time (UTC) | Step | Evidence |
 |---|---|---|
-| 12:23 | Create market 9: both HTS tokens and the settlement schedule in one call | [transaction](https://hashscan.io/testnet/transaction/0xea954246057551478026c91643b484ec5bf5c7384b45ed360eb0671a9fd6ebdf), YES [0.0.10841804](https://hashscan.io/testnet/token/0.0.10841804), NO [0.0.10841805](https://hashscan.io/testnet/token/0.0.10841805) |
-| 12:24 | Stake 5 HBAR on YES and 3 HBAR on NO | [YES](https://hashscan.io/testnet/transaction/0x56e68547fd4a270b15c2c592b78d61f74eebc42e0376a551bf1df607b067525a), [NO](https://hashscan.io/testnet/transaction/0x8b56c6041c7d72a43946288530820eec6e45e568c72508a6aab577dad148f81b) |
-| 12:25 | Open a SaucerSwap V1 pool with 2 YES and 1 HBAR ($2 pool fee, 19.66 HBAR) | [transaction](https://hashscan.io/testnet/transaction/0xd1b2a8ceab98b86df99449b8ae99e0517d2ccf6ffdf2f3c28f25bbf387a3cd92), [pair](https://hashscan.io/testnet/contract/0x0F458503839748eD699663Cfe791606715eD6559) |
-| 12:26 | Buy 0.47740141 YES for 0.5 HBAR, then sell 0.5 YES for 0.51546709 HBAR | [buy](https://hashscan.io/testnet/transaction/0x6fd98dcce499906c9373b861918893ce41aa93702d47c5da994a521288424bdd), [sell](https://hashscan.io/testnet/transaction/0xaf032117c5f1e5247b7a2d209bf70dca239a43953c7ae622b1df6a48d92f2b25) |
-| 12:29 | Expiry | |
-| 12:39 | Network runs the booked call; no round after expiry yet, so it books a retry | [schedule 0.0.10841806](https://hashscan.io/testnet/schedule/0.0.10841806), [retry booking](https://hashscan.io/testnet/transaction/0xf61efe6635cb79f9756711a6c1289a933c154d0c4b0997d974baca50f7760e38) |
-| 13:09 | First retry runs; still no round, books the second | [schedule 0.0.10842005](https://hashscan.io/testnet/schedule/0.0.10842005), [retry booking](https://hashscan.io/testnet/transaction/0xcfceee9c0d9f51fb704b52cd7676304666412f66964f3ac866902ccd3e0af440) |
-| 13:18 | Chainlink publishes $0.10112553, 2955 s after expiry | |
-| 13:39 | Second retry settles YES on that round | [schedule 0.0.10842320](https://hashscan.io/testnet/schedule/0.0.10842320), [settlement](https://hashscan.io/testnet/transaction/0x405de9b01ba6e4f83cede2c0c8b1c155452fd757b68766dacb83c95fb08c0366) |
-| 13:39 | Redeem the YES tokens still held for 4.76384225 HBAR (1.6 HBAR each), no approve step | [transaction](https://hashscan.io/testnet/transaction/0xdea46d2d5b1a1a580e2bfd93bf37cf34cd00873d8671a1be6c6ea29c7575977a) |
-| 13:40 | Creator withdraws what is left of the reserve | [transaction](https://hashscan.io/testnet/transaction/0x634d9078081c2be5980dc6adcc2d2942de374fd7ee54133229a2ae693971dcd0) |
+| 13:54 | Create market 0: both HTS tokens and the settlement schedule in one call | [transaction](https://hashscan.io/testnet/transaction/0x129670f8595bbd9de52e2e07f315ef12e33088c41106d00659e63cab0ac47f7a), YES [0.0.10842769](https://hashscan.io/testnet/token/0.0.10842769), NO [0.0.10842770](https://hashscan.io/testnet/token/0.0.10842770) |
+| 13:54 | Stake 5 HBAR on YES and 3 HBAR on NO | [YES](https://hashscan.io/testnet/transaction/0x32ace57e5a1a0a1320834492243b4d27abea82ed6adf353bc57e6f432bc1e471), [NO](https://hashscan.io/testnet/transaction/0x7b48d8913d3becbc397ab38a145ff24b24e73156a720026507658bb6d5a89543) |
+| 13:55 | Open a SaucerSwap V1 pool with 2 YES and 1 HBAR ($2 pool fee, 19.67 HBAR) | [transaction](https://hashscan.io/testnet/transaction/0x642bc15e0e35834d9d94d618c33286f8a1c0fb8bfd3094534ecc6d63f18a52bc), [pair](https://hashscan.io/testnet/contract/0x1A7a5EDd83E91f6DA34AD6FB5C4ABAE086b1A09B) |
+| 13:56 | Buy 0.47732979 YES for 0.5 HBAR, then sell 0.5 YES for 0.5155261 HBAR | [buy](https://hashscan.io/testnet/transaction/0xc31fe897b36ecd7e9dec5614699f0c654b0ac3d2e15f6b9bbde7538ff11bcaed), [sell](https://hashscan.io/testnet/transaction/0xa16245c9a989983b0a8ed6db35d08f1755ec3772db0233f6984f392e02454f02) |
+| 13:59 | Expiry | |
+| 14:09 | Network runs the booked call; no round after expiry yet, so it books a retry | [schedule 0.0.10842771](https://hashscan.io/testnet/schedule/0.0.10842771), [retry booking](https://hashscan.io/testnet/transaction/0x4a9fd5faaf474e1d9cd098952a7e1a48a943f9241f305304c6d1612a5d6a3b70) |
+| 14:39 | First retry runs; still no round, books the second | [schedule 0.0.10842974](https://hashscan.io/testnet/schedule/0.0.10842974), [retry booking](https://hashscan.io/testnet/transaction/0x6e39a86a81039a9519f4706eed85e4b0758f39542e1b3470fccc9736a0261c95) |
+| 14:45 | Chainlink publishes $0.10217054, 2730 s after expiry | |
+| 15:09 | Second retry settles YES on that round | [schedule 0.0.10843302](https://hashscan.io/testnet/schedule/0.0.10843302), [settlement](https://hashscan.io/testnet/transaction/0xc06423c8db077cf25d0b226b047b428c8a51b92cec490b7111267e41093c0228) |
+| 15:10 | Redeem the YES tokens still held for 4.76372766 HBAR (1.6 HBAR each), no approve step | [transaction](https://hashscan.io/testnet/transaction/0xf39de86a99c5a470d85c47d93d3b769acc7a2fa6e1881696e181f6004e6b4b79) |
+| 15:10 | Creator withdraws what is left of the reserve | [transaction](https://hashscan.io/testnet/transaction/0xe52a927341e47849dfb3e8d948f4d1c59d74d315f7266451f69334f0984346eb) |
+| 15:10 | Publish the market's terms and result to the HCS record topic | [topic 0.0.10842926, message 1](https://hashscan.io/testnet/topic/0.0.10842926) |
 
+The same history is on the [market 0 page](https://predera.vercel.app/markets/0) (Activity panel and Public record on HCS) and in JSON at [/api/markets/0](https://predera.vercel.app/api/markets/0) and [/api/record?marketId=0](https://predera.vercel.app/api/record?marketId=0).
 
 Earlier deployments, kept as history:
+
+- `0x45F344b4...AcED`, 2026-10-03, market 9: the same flow on the contract before schedule-capacity probing. SaucerSwap pool, buy and sell, two self-booked retries, settled YES at $0.10112553 on a round 2955 s after expiry ([settlement](https://hashscan.io/testnet/transaction/0x405de9b01ba6e4f83cede2c0c8b1c155452fd757b68766dacb83c95fb08c0366), [redeem](https://hashscan.io/testnet/transaction/0xdea46d2d5b1a1a580e2bfd93bf37cf34cd00873d8671a1be6c6ea29c7575977a)). Its market 0 shows the other path: the feed published only 2 h 21 min after expiry, past the round window, so it waits for Pyth or a void.
 
 - `0x9b2A8977...516E`, 2026-10-03, market 0: settled YES on its second self-booked retry, 1960 s after expiry ([settlement](https://hashscan.io/testnet/transaction/0xefda2487d6298b82ccc1ac0d390dc404b21497160f8bb2a37c9e551d4d0afb8c), [redeem](https://hashscan.io/testnet/transaction/0x220a02113834eb25b8b84cd8dc36a49809896afb3c5ebbc0f8519e94a954c335)). It used 3 retries, 15 minutes apart.
 - `0x1768f713...6ac7`, 2026-10-03: the feed stayed quiet for 79 minutes, past that deployment's last retry. Every scheduled check returned without reverting, then a manual `settle` closed the market once the round landed ([settlement](https://hashscan.io/testnet/transaction/0x52b2f2e9ec697b4f2e223e917bee70c4b8242b270fb3dea875ab9669bf6a6daa)). That run is why the current deployment checks across the whole 2 hour window.

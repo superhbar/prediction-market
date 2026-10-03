@@ -1,34 +1,34 @@
 {
   "name": "market-activity",
-  "description": "Graded by the Harness validator against the running app on Hedera testnet. Market 9 on the shipped deployment (0x45F344b4ce70B90BDC6e439559e6160B23c5AcED) is a settled market with known history: stakes of 5 HBAR on YES and 3 HBAR on NO, two self-booked retries, settlement YES via Chainlink at $0.10112553, a redeem and a reserve withdrawal.",
+  "description": "Graded by the Harness validator against the running app on Hedera testnet. Market 0 on the shipped deployment (0x2528B83f1B73780a226838039376cc1435b5F289) is a settled market with known history: stakes of 5 HBAR on YES and 3 HBAR on NO, two self-booked retries, settlement YES via Chainlink at $0.10217054, a redeem and a reserve withdrawal.",
   "assertions": [
     {
       "id": "C1",
       "journey": "Read a market's history without a wallet",
-      "route": "/markets/9",
+      "route": "/markets/0",
       "severity": "critical",
-      "statement": "The market page shows an Activity panel listing market 9's on-chain history, newest first: market created, staked 5 HBAR on YES, staked 3 HBAR on NO, retry booked, retry booked, settled YES via Chainlink, redeemed, reserve withdrawn.",
-      "howToVerify": "Open /markets/9 with no wallet connected. Find the Activity section below the settlement timeline. Check that the eight entries above are present, that the amounts read 5 HBAR and 3 HBAR (not 0.00000005 or 500000000), and that the first entry is the most recent one. Cross-check against GET https://testnet.mirrornode.hedera.com/api/v1/contracts/0x45F344b4ce70B90BDC6e439559e6160B23c5AcED/results/logs?order=desc&limit=100, keeping logs whose topics[1] is 0x0000000000000000000000000000000000000000000000000000000000000009 (market 9).",
+      "statement": "The market page shows an Activity panel listing market 0's on-chain history, newest first: market created, staked 5 HBAR on YES, staked 3 HBAR on NO, retry booked, retry booked, settled YES via Chainlink, redeemed, reserve withdrawn.",
+      "howToVerify": "Open /markets/0 with no wallet connected. Find the Activity section below the settlement timeline. Check that the eight entries above are present, that the amounts read 5 HBAR and 3 HBAR (not 0.00000005 or 500000000), and that the first entry is the most recent one. Cross-check against GET https://testnet.mirrornode.hedera.com/api/v1/contracts/0x2528B83f1B73780a226838039376cc1435b5F289/results/logs?order=desc&limit=100, keeping logs whose topics[1] is the zero word (market 0); do not use the topic1 query filter, which matches nothing for market 0.",
       "walletRequired": false,
       "verifiableWithoutCredentials": true
     },
     {
       "id": "C2",
       "journey": "Verify an entry on Hashscan",
-      "route": "/markets/9",
+      "route": "/markets/0",
       "severity": "critical",
       "statement": "Every activity entry links to its transaction on Hashscan testnet, and the link matches the transaction that emitted the event.",
-      "howToVerify": "On /markets/9, read the href of each 'View on Hashscan' link. Each must start with https://hashscan.io/testnet/transaction/. The link on the settlement entry must carry the same transaction hash as the MarketSettled log returned by the mirror node query in C1.",
+      "howToVerify": "On /markets/0, read the href of each 'View on Hashscan' link. Each must start with https://hashscan.io/testnet/transaction/. The link on the settlement entry must carry the same transaction hash as the MarketSettled log returned by the mirror node query in C1.",
       "walletRequired": false,
       "verifiableWithoutCredentials": true
     },
     {
       "id": "C3",
       "journey": "Graceful states",
-      "route": "/markets/9",
+      "route": "/markets/0",
       "severity": "major",
       "statement": "The panel has a loading state while the mirror node responds and an error state with a Retry button when the request fails; the rest of the page keeps working in both.",
-      "howToVerify": "Reload /markets/9 and observe the panel before data arrives. Then block requests to testnet.mirrornode.hedera.com (or read the component and hook code if the browser cannot block requests) and confirm the panel shows an error message and a Retry button while the headline, odds and settlement timeline still render.",
+      "howToVerify": "Reload /markets/0 and observe the panel before data arrives. Then block requests to testnet.mirrornode.hedera.com (or read the component and hook code if the browser cannot block requests) and confirm the panel shows an error message and a Retry button while the headline, odds and settlement timeline still render.",
       "walletRequired": false,
       "verifiableWithoutCredentials": true
     },
@@ -37,8 +37,8 @@
       "journey": "Existing app still works",
       "route": "/",
       "severity": "critical",
-      "statement": "The market list, create form, portfolio and debug pages still render, and market 9 still shows its resolution strip ('Resolved YES') and settlement timeline.",
-      "howToVerify": "Open /, /markets/new, /portfolio and /debug and confirm each renders without an error overlay. Open /markets/9 and confirm the 'Resolved YES' strip and the 'How this market settles' timeline are present.",
+      "statement": "The market list, create form, portfolio and debug pages still render, and market 0 still shows its resolution strip ('Resolved YES') and settlement timeline.",
+      "howToVerify": "Open /, /markets/new, /portfolio and /debug and confirm each renders without an error overlay. Open /markets/0 and confirm the 'Resolved YES' strip and the 'How this market settles' timeline are present.",
       "walletRequired": false,
       "verifiableWithoutCredentials": true
     },

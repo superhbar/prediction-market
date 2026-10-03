@@ -158,7 +158,7 @@ function toEntry(eventName: string, args: EventArgs, log: MirrorContractLog): Ac
       const side = args.yes === true ? "YES" : "NO";
       return {
         kind: eventName,
-        label: `Redeemed ${formatHbar(amount)} ${side} for ${formatHbar(payout)}`,
+        label: `Redeemed ${formatHbar(amount).replace("HBAR", side)} for ${formatHbar(payout)}`,
         account: String(args.account ?? ""),
         ...base(log),
       };
