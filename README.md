@@ -20,6 +20,16 @@ The Next.js app has a market list, a create form that defaults the strike to the
 
 Around it: 104 Foundry tests (HTS and the Schedule Service mocked, 100% line coverage of the production contracts: PredictionMarkets 238/238 lines, 89% branches), 61 vitest tests, an end-to-end script that runs the whole lifecycle on testnet, and a Hedera Harness recipe in `.harness/` that one feature of this app was built with.
 
+## What you get that is hard to build alone
+
+- **Markets that settle themselves.** `createMarket` books its own `settle` call with the Hedera Schedule Service (HIP-1215). When the oracle is late, the scheduled call books the next check from the market's own reserve, up to 4 times across the whole 2 hour price window. No keeper bot, no cron server, no admin key. Every step of a real run is linked under [Verified on testnet](#verified-on-testnet).
+- **A settlement price nobody can pick.** The contract settles on the first Chainlink round published at or after expiry, and only once it has proven that round is the first: it walks back within the feed phase until it finds a round from before expiry. Pyth is a fallback with the same rule, and only opens when Chainlink provably has no round. `chainlinkSettlementRound` exposes the same check to the UI, so the Settle button appears exactly when the contract would accept it.
+- **Native Hedera services doing real work.** Each market creates its own YES and NO HTS tokens, staking mints them and redeeming wipes them with the contract's wipe key, so there is no approve step. Activity, schedules and balances come from the mirror node with Hashscan links on every row.
+- **Accounting you can audit.** Payouts come only from recorded pools, a fuzz test proves winners never receive more than the pool, and `withdrawReserve` can only pay out surplus beyond what traders and other markets are owed. A scheduled call never reverts on a handled path, because Hedera bills a reverted scheduled execution anyway.
+- **Hedera details already measured.** [docs/hedera-notes.md](docs/hedera-notes.md) records what was measured on testnet: tinybar inside the EVM vs weibar in wallets, the 0.65 HBAR first-stake association cost, scheduled-call gas and billing, why `forge script --broadcast` cannot reach Hashio, and the mirror node log filter that silently matches nothing.
+- **Proof at every level.** 104 Foundry tests with 100% line coverage of the production contracts, 61 vitest tests, an end-to-end script that runs create, stake, scheduled settlement, redeem and reserve withdrawal on real testnet, source verified on Sourcify, CI that scaffolds the template fresh with both npm and yarn, and a [live demo](https://predera.vercel.app).
+- **Ready for coding agents.** `AGENTS.md` lists the invariants an agent must not break, and `.harness/` ships a Hedera Harness recipe whose validators pass in freshly scaffolded npm and yarn projects. The market activity panel was built through that recipe.
+
 ## Quick start
 
 Prerequisites:
