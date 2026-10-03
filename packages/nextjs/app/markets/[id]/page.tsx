@@ -5,7 +5,7 @@ type MarketPageProps = {
   searchParams: Promise<{ side?: string }>;
 };
 
-/** `?side=no` preselects NO in the stake panel, so "Buy No" on a market card lands ready to trade. */
+/** `?side=no` preselects NO in the stake panel, so "Stake No" on a market card lands ready to stake. */
 const MarketPage = async ({ params, searchParams }: MarketPageProps) => {
   const { id } = await params;
   const { side } = await searchParams;
