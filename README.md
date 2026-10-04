@@ -478,10 +478,6 @@ Tier 3 acceptance contract, graded by hand. C1, C2 and C4 were re-graded on 2026
 | C4 | Existing routes and the resolution strip still render | Pass ("Resolved YES") |
 | C5 | A new stake appears after a real transaction | Pass with the deployer as signer: [stake on market 1](https://hashscan.io/testnet/transaction/0x8b508cde06355e3acbc1e6f5439ef0b5048373f039e7fcbcd0122a94e841618e) showed up on refresh |
 
-## Disclaimer
-
-Unaudited and educational. Built testnet-first for learning the HTS, HIP-1215 scheduling, and oracle settlement pattern. Do not use with real funds or deploy to mainnet without a professional audit. Mainnet oracle addresses in `HelperConfig.s.sol` are present for reference only.
-
 ## License
 
 MIT. See [LICENCE](LICENCE).
