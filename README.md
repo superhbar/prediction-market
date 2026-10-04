@@ -82,7 +82,7 @@ The script creates a six-minute market, stakes both sides, opens a SaucerSwap po
 |---|---|---|---|
 | `NEXT_PUBLIC_HEDERA_TESTNET_RPC_URL` | `packages/nextjs/.env` | No (has a default) | JSON-RPC endpoint the frontend uses on testnet |
 | `NEXT_PUBLIC_HEDERA_MAINNET_RPC_URL` | `packages/nextjs/.env` | No (has a default) | JSON-RPC endpoint the frontend uses on mainnet |
-| `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | `packages/nextjs/.env` | No | WalletConnect project id for RainbowKit. Without it the app offers MetaMask and the burner wallet only: the shared default id is rate-limited and its failed analytics calls fill the console |
+| `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | `packages/nextjs/.env` | No | WalletConnect project id for RainbowKit. Without it the app offers the browser's injected wallet (MetaMask or another extension) and the burner wallet: the shared default id is rate-limited and its failed analytics calls fill the console |
 | `PYTH_API_KEY` | `packages/nextjs/.env` | No | Server-only key for the Pyth Hermes proxy at `app/api/pyth`. Without it the app runs fully and the fallback button explains how to enable it |
 | `PYTH_HERMES_URL` | `packages/nextjs/.env` | No | Override for the Pyth Hermes endpoint (default https://hermes.pyth.network) |
 | `HCS_RECORD_TOPIC_ID` | `packages/nextjs/.env` | No | HCS topic for settlement records (create one with `node packages/nextjs/scripts/createRecordTopic.mjs`). Shows the Public record panel |
