@@ -8,9 +8,11 @@ npm create scaffold-hbar@latest -- --template superhbar/prediction-market
 
 Live demo on Hedera testnet: [predera.vercel.app](https://predera.vercel.app). It reads the shipped deployment, so you can open a market's settlement timeline and activity log without installing anything. The built-in burner wallet works there too, on testnet only: a fresh burner address is not a Hedera account until it first receives HBAR, so send it testnet HBAR (the footer links the Portal faucet) before staking. Until then the portfolio says so instead of showing balances.
 
+![Predera home page: every market with its odds, pool sizes and countdown, filterable by status and asset, read straight from the Hedera relay and mirror node](docs/screenshots/markets.png)
+
 ![Market 0 on testnet: the scheduled call found no Chainlink round, booked two retries on its own, and the second retry settled YES. Every step is in the activity panel with a Hashscan link](docs/screenshots/market-detail.png)
 
-Demo video (100 s, testnet, production build): [docs/predera-demo.mp4](docs/predera-demo.mp4). More screenshots: [an open market with the payout preview](docs/screenshots/market-open.png), [its Trade tab with the implied chance](docs/screenshots/market-trade.png), [market list](docs/screenshots/markets.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [light theme](docs/screenshots/market-detail-light.png). All are taken from the production build against the live testnet deployment.
+Demo video (100 s, testnet, production build): [docs/predera-demo.mp4](docs/predera-demo.mp4). More screenshots: [an open market with the payout preview](docs/screenshots/market-open.png), [its Trade tab with the implied chance](docs/screenshots/market-trade.png), [create form](docs/screenshots/create.png), [mobile](docs/screenshots/market-detail-mobile.png), [light theme](docs/screenshots/market-detail-light.png). All are taken from the production build against the live testnet deployment.
 
 ## What's in it
 
@@ -473,7 +475,7 @@ Tier 3 acceptance contract, graded by hand. C1, C2 and C4 were re-graded on 2026
 | Id | Assertion | Result |
 |---|---|---|
 | C1 | Market 0 lists created, two stakes, two retries booked, settled YES, redeemed, reserve withdrawn, newest first, with correct amounts | Pass: 8 entries, 5 and 3 HBAR |
-| C2 | Each entry links to the transaction that emitted it | Pass: every hash matches the mirror node logs, settlement is `0xefda2487...` |
+| C2 | Each entry links to the transaction that emitted it | Pass: every hash matches the mirror node logs, settlement is `0xc06423c8...` |
 | C3 | Loading and error states, page keeps working | Pass by code review (skeleton, error with Retry, failures stay inside the panel) |
 | C4 | Existing routes and the resolution strip still render | Pass ("Resolved YES") |
 | C5 | A new stake appears after a real transaction | Pass with the deployer as signer: [stake on market 1](https://hashscan.io/testnet/transaction/0x8b508cde06355e3acbc1e6f5439ef0b5048373f039e7fcbcd0122a94e841618e) showed up on refresh |
